@@ -1,6 +1,10 @@
 <?php
 require_once __DIR__ . '/../config/db.php';
 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 $pdo = db();
 
 if (!function_exists('h')) {
@@ -9,6 +13,12 @@ if (!function_exists('h')) {
     }
 }
 
+/* ---------- CSRF token ---------- */
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrf = $_SESSION['csrf_token'];
+
 $limit  = 10;
 $page   = isset($_GET['p']) ? max(1, (int)$_GET['p']) : 1;
 $offset = ($page - 1) * $limit;
@@ -16,6 +26,12 @@ $offset = ($page - 1) * $limit;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     header('Content-Type: application/json');
+
+    // Verify CSRF
+    if (!hash_equals($_SESSION['csrf_token'] ?? '', $_POST['csrf_token'] ?? '')) {
+        echo json_encode(['ok' => false, 'error' => 'Session expired. Please refresh the page.']);
+        exit;
+    }
 
     $action = $_POST['action'];
 
@@ -133,7 +149,8 @@ $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <i class="fa fa-search"></i>
             <input type="text" id="searchInput" placeholder="Search category...">
         </div>
-        <button class="create-btn" onclick="openAddModal()">
+        <!-- FIXED: Removed onclick, added id="addCategoryBtn" -->
+        <button type="button" class="create-btn" id="addCategoryBtn">
             <i class="fa fa-plus"></i> Add Category
         </button>
     </div>
@@ -175,12 +192,16 @@ $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             </span>
                         </td>
                         <td>
-                            <button class="action-btn edit-btn"
-                                    onclick='openEditModal(<?= (int)$row["id"] ?>, <?= htmlspecialchars(json_encode($row), ENT_QUOTES) ?>)'>
+                            <!-- FIXED: Removed onclick, using data attributes -->
+                            <button type="button" class="action-btn edit-btn"
+                                    data-id="<?= (int)$row['id'] ?>"
+                                    data-name="<?= h($row['category_name']) ?>"
+                                    data-description="<?= h($row['description']) ?>">
                                 <i class="fa fa-pen"></i>
                             </button>
-                            <button class="action-btn delete-btn"
-                                    onclick="deleteCategory(<?= (int)$row['id'] ?>)">
+                            <button type="button" class="action-btn delete-btn"
+                                    data-id="<?= (int)$row['id'] ?>"
+                                    data-name="<?= h($row['category_name']) ?>">
                                 <i class="fa fa-trash"></i>
                             </button>
                         </td>
@@ -207,7 +228,7 @@ $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     <!-- PAGINATION -->
         <div class="pagination">
-            <span>
+            <span id="paginationSummary">
                 Showing <?= count($categories) ?> of <?= $totalCategories ?> categories
             </span>
             <div class="pages">
@@ -243,9 +264,9 @@ $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 </div>
 
-<!-- ============================================================
-     ADD / EDIT CATEGORY MODAL
-============================================================ -->
+<!-- ============================================================ -->
+<!-- MODAL FORM -->
+<!-- ============================================================ -->
 <div class="modal-overlay" id="categoryModalOverlay">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="categoryModalTitle">
 
@@ -259,7 +280,7 @@ $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <p id="categoryModalSubtitle">Create a new program category</p>
                 </div>
             </div>
-            <button class="modal-close" id="categoryModalClose" aria-label="Close">
+            <button type="button" class="modal-close" id="categoryModalClose" aria-label="Close">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
@@ -270,32 +291,27 @@ $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <span></span>
         </div>
 
-        <form id="categoryForm">
+        <form id="categoryForm" novalidate>
             <div class="modal-body">
-
                 <input type="hidden" name="id" id="categoryId" value="">
-
                 <div class="modal-field">
                     <label for="categoryName">
                         <i class="fa-solid fa-tag"></i>
                         Category Name <span class="required">*</span>
                     </label>
-                    <input type="text" name="category_name" id="categoryName" placeholder="e.g. Student Exchange" required>
+                    <input type="text" name="category_name" id="categoryName" placeholder="e.g. Student Exchange" maxlength="150" required>
                 </div>
-
                 <div class="modal-field">
                     <label for="categoryDescription">
                         <i class="fa-solid fa-align-left"></i>
                         Description
                     </label>
-                    <textarea name="description" id="categoryDescription" placeholder="Brief description of this category..."></textarea>
+                    <textarea name="description" id="categoryDescription" placeholder="Brief description of this category..." maxlength="500"></textarea>
                 </div>
-
                 <div class="modal-tip">
                     <span class="tip-icon"><i class="fa-solid fa-info"></i></span>
                     <span><strong>Tip:</strong> Use clear, consistent category names so they're easy to filter across programs.</span>
                 </div>
-
             </div>
 
             <div class="modal-footer">
@@ -311,4 +327,8 @@ $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </div>
 </div>
 
+<!-- THIS SCRIPT TAG MUST BE EXACTLY HERE -->
+<script>
+    window.PROGRAM_CATEGORY = { csrf: <?= json_encode($csrf) ?> };
+</script>
 <script src="../asset/js/category.js"></script>

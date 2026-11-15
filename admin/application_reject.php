@@ -1,27 +1,68 @@
+
 <?php
 require_once __DIR__ . '/../config/db.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 header('Content-Type: application/json');
 
-$pdo = db();
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+    exit;
+}
 
-$id = $_POST['id'] ?? null;
+if (
+    !isset($_SESSION['user_id']) ||
+    !in_array($_SESSION['user_role'] ?? '', ['admin', 'super admin'], true)
+) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'Unauthorized access.']);
+    exit;
+}
 
-if (!$id) {
-    echo json_encode(['success' => false, 'message' => 'Missing ID']);
+$id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
+
+if (!$id || $id < 1) {
+    echo json_encode(['success' => false, 'message' => 'Invalid application ID.']);
     exit;
 }
 
 try {
-    $stmt = $pdo->prepare("UPDATE applications SET status = 'rejected' WHERE id = ?");
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        UPDATE applications
+        SET status = 'rejected',
+            reviewed_at = NOW()
+        WHERE id = ?
+    ");
+
     $stmt->execute([$id]);
+
+    if ($stmt->rowCount() === 0) {
+        $check = $pdo->prepare("SELECT id FROM applications WHERE id = ?");
+        $check->execute([$id]);
+
+        if (!$check->fetch()) {
+            echo json_encode(['success' => false, 'message' => 'Application not found.']);
+            exit;
+        }
+    }
 
     echo json_encode([
         'success' => true,
-        'message' => 'Application rejected'
+        'message' => 'Application rejected successfully.'
     ]);
-} catch (Exception $e) {
+
+} catch (Throwable $e) {
+    error_log($e->getMessage());
+
+    http_response_code(500);
     echo json_encode([
         'success' => false,
-        'message' => $e->getMessage()
+        'message' => 'Unable to reject application.'
     ]);
 }

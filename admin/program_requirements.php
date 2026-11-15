@@ -11,6 +11,12 @@ $limit  = 10;
 $page   = isset($_GET['p']) ? max(1, (int)$_GET['p']) : 1;
 $offset = ($page - 1) * $limit;
 
+if (!function_exists('h')) {
+    function h($value): string {
+        return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+    }
+}
+
 /* CSRF TOKEN */
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -21,14 +27,8 @@ function checkCsrf(): void {
     $sent = $_POST['csrf_token'] ?? '';
     if (!isset($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $sent)) {
         http_response_code(403);
-        echo json_encode(['ok' => false, 'error' => 'Invalid CSRF token']);
+        echo json_encode(['ok' => false, 'message' => 'Invalid CSRF token']);
         exit();
-    }
-}
-
-if (!function_exists('h')) {
-    function h($value): string {
-        return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
     }
 }
 
@@ -40,35 +40,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     checkCsrf();
 
     $program_id        = (int)($_POST['program_id'] ?? 0);
-    $requirement_name  = trim((string)($_POST['requirement_name'] ?? ''));
+    $requirement_id    = (int)($_POST['requirement_id'] ?? 0);
     $is_required       = isset($_POST['is_required']) ? 1 : 0;
 
-    if (!$program_id || $requirement_name === '') {
-        echo json_encode(['ok' => false, 'message' => 'Program and requirement name are required.']);
+    if (!$program_id || !$requirement_id) {
+        echo json_encode(['ok' => false, 'message' => 'Program and Requirement are required.']);
         exit();
     }
 
     try {
+        // Check if it already exists
+        $check = $pdo->prepare("SELECT id FROM program_requirements WHERE program_id = ? AND requirement_id = ?");
+        $check->execute([$program_id, $requirement_id]);
+        if ($check->fetch()) {
+            echo json_encode(['ok' => false, 'message' => 'This requirement is already assigned to this program.']);
+            exit();
+        }
+
+        // Insert using the IDs
         $stmt = $pdo->prepare("
             INSERT INTO program_requirements
-            (program_id, requirement_name, is_required)
+            (program_id, requirement_id, is_required)
             VALUES (?, ?, ?)
         ");
-        $stmt->execute([$program_id, $requirement_name, $is_required]);
+        $stmt->execute([$program_id, $requirement_id, $is_required]);
 
-        echo json_encode(['ok' => true, 'message' => 'Requirement added successfully.']);
+        echo json_encode(['ok' => true, 'message' => 'Requirement assigned successfully.']);
     } catch (PDOException $e) {
+        error_log($e->getMessage());
         echo json_encode(['ok' => false, 'message' => 'Database error. Please try again.']);
     }
     exit();
 }
 
+/* Fetch Programs */
 $programs = $pdo->query("
     SELECT id, program_name
     FROM programs
     ORDER BY program_name
 ")->fetchAll(PDO::FETCH_ASSOC);
 
+/* Fetch Master Requirements */
+$masterRequirements = $pdo->query("
+    SELECT id, requirement_name
+    FROM requirements
+    ORDER BY requirement_name
+")->fetchAll(PDO::FETCH_ASSOC);
+
+/* Fetch total count for pagination */
 $totalCount = (int)$pdo->query("
     SELECT COUNT(*)
     FROM program_requirements
@@ -76,16 +95,17 @@ $totalCount = (int)$pdo->query("
 
 $totalPages = max(1, ceil($totalCount / $limit));
 
+/* Fetch linked requirements */
 $stmt = $pdo->prepare("
     SELECT
         pr.id,
         p.program_name,
-        pr.requirement_name,
+        r.requirement_name,
         pr.is_required,
         pr.created_at
     FROM program_requirements pr
-    INNER JOIN programs p
-        ON pr.program_id = p.id
+    INNER JOIN programs p ON pr.program_id = p.id
+    INNER JOIN requirements r ON pr.requirement_id = r.id
     ORDER BY pr.created_at DESC
     LIMIT :limit OFFSET :offset
 ");
@@ -98,25 +118,26 @@ $requirements = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 <link rel="stylesheet" href="../asset/css/program_requirements.css">
 
+<!-- FIXED: Changed .content to .content-card to match CSS -->
 <div class="content-card">
 
     <div class="page-header">
         <h2>Program Requirements</h2>
-        <p>Assign requirements to specific programs.</p>
+        <p>Assign specific documents from your master list to individual programs.</p>
     </div>
 
     <div class="toolbar">
+        <!-- FIXED: Changed .create-btn to .btn-primary to match CSS -->
         <button type="button" class="btn-primary" onclick="openAddModal()">
-            <i class="fa fa-plus"></i> Add Requirement</button>
+            <i class="fa fa-plus"></i> Assign Requirement
+        </button>
     </div>
 
     <div class="table-card">
 
         <table>
-
             <thead>
                 <tr>
-                    <th>ID</th>
                     <th>Program</th>
                     <th>Requirement</th>
                     <th>Status</th>
@@ -125,13 +146,18 @@ $requirements = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </thead>
 
             <tbody id="requirementsBody">
-
                 <?php if (!empty($requirements)): ?>
                     <?php foreach ($requirements as $row): ?>
                     <tr>
-                        <td><?= h($row['program_name']) ?></td>
-                        <td><?= h($row['requirement_name']) ?></td>
+                        <td style="font-weight:600;"><?= h($row['program_name']) ?></td>
                         <td>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <i class="fa-solid fa-file-lines" style="color:#94a3b8;"></i>
+                                <?= h($row['requirement_name']) ?>
+                            </div>
+                        </td>
+                        <td>
+                            <!-- FIXED: Changed to .badge-success / .badge-secondary to match CSS -->
                             <?= $row['is_required']
                                 ? '<span class="badge-success">Required</span>'
                                 : '<span class="badge-secondary">Optional</span>' ?>
@@ -139,11 +165,11 @@ $requirements = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <td><?= date('M d, Y', strtotime($row['created_at'])) ?></td>
                     </tr>
                     <?php endforeach; ?>
-                    <?php else: ?>
-                        <tr class="empty-row">
-                            <td colspan="5">No requirements found</td>
-                        </tr>
-                    <?php endif; ?>
+                <?php else: ?>
+                    <tr class="empty-row">
+                        <td colspan="4">No requirements assigned to any program yet.</td>
+                    </tr>
+                <?php endif; ?>
             </tbody>
         </table>
 
@@ -182,13 +208,12 @@ $requirements = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
         </div>
 
-
     </div>
 
 </div>
 
 <!-- ===================== ADD REQUIREMENT MODAL ===================== -->
-<div id="addModal" class="modal-overlay" onclick="closeModalOutside(event,'addModal')">
+<div id="addModal" class="modal-overlay" onclick="closeRequirementModalOutside(event,'addModal')">
     <div class="modal-box">
 
         <div class="modal-header">
@@ -197,11 +222,11 @@ $requirements = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <i class="fa fa-file-circle-plus"></i>
                 </div>
                 <div>
-                    <h3>Add Program Requirement</h3>
-                    <p class="modal-subtitle">Assign a requirement to a program.</p>
+                    <h3>Assign Program Requirement</h3>
+                    <p class="modal-subtitle">Select a program and a requirement from the master list.</p>
                 </div>
             </div>
-            <button class="modal-close" onclick="closeModal('addModal')">
+            <button class="modal-close" onclick="closeRequirementModal('addModal')">
                 <i class="fa fa-times"></i>
             </button>
         </div>
@@ -228,27 +253,36 @@ $requirements = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
                 <div class="form-group">
                     <label class="form-label">
-                        <i class="fa fa-file-signature"></i> Requirement Name *
+                        <i class="fa fa-file-signature"></i> Document Requirement *
                     </label>
-                    <input type="text" name="requirement_name" class="form-input"
-                           placeholder="Example: Medical Certificate" required maxlength="150">
+                    <select name="requirement_id" class="form-input" required>
+                        <option value="">Select Requirement</option>
+                        <?php foreach ($masterRequirements as $req): ?>
+                            <option value="<?= (int)$req['id'] ?>">
+                                <?= h($req['requirement_name']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <small style="color:#94a3b8; font-size:11px; margin-top:4px; display:block;">
+                        Can't find it? <a href="?page=requirements" style="color:#2563eb;">Manage Master List</a>
+                    </small>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" style="flex-direction:row-reverse;justify-content:flex-end;">
-                        <input type="checkbox" name="is_required" checked style="width:16px;height:16px;">
-                        Required
+                    <label class="form-label" style="flex-direction:row-reverse;justify-content:flex-end; cursor:pointer;">
+                        <input type="checkbox" name="is_required" checked style="width:16px;height:16px; margin-left:8px;">
+                        Is this requirement mandatory?
                     </label>
                 </div>
 
             </div>
 
             <div class="modal-footer">
-                <button type="button" class="btn-secondary" onclick="closeModal('addModal')">
+                <button type="button" class="btn-secondary" onclick="closeRequirementModal('addModal')">
                     Cancel
                 </button>
                 <button type="submit" class="btn-confirm">
-                    <i class="fa fa-floppy-disk"></i> Save Requirement
+                    <i class="fa fa-floppy-disk"></i> Save Assignment
                 </button>
             </div>
         </form>
@@ -259,31 +293,29 @@ $requirements = $stmt->fetchAll(PDO::FETCH_ASSOC);
 <script>
 window.PROGRAM_REQUIREMENTS_CSRF = <?= json_encode($csrfToken) ?>;
 
-/* ── Modal helpers ── */
-function openModal(id) {
+function openRequirementModal(id) {
     document.getElementById(id).classList.add('open');
     document.body.style.overflow = 'hidden';
 }
 
-function closeModal(id) {
+function closeRequirementModal(id) {
     document.getElementById(id).classList.remove('open');
     document.body.style.overflow = '';
 }
 
-function closeModalOutside(e, id) {
-    if (e.target.id === id) closeModal(id);
+function closeRequirementModalOutside(e, id) {
+    if (e.target.id === id) closeRequirementModal(id);
 }
 
 document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeModal('addModal');
+    if (e.key === 'Escape') closeRequirementModal('addModal');
 });
 
 function openAddModal() {
     document.getElementById('addForm').reset();
-    openModal('addModal');
+    openRequirementModal('addModal');
 }
 
-/* ── ADD form submit (AJAX) ── */
 document.getElementById('addForm').addEventListener('submit', function (e) {
     e.preventDefault();
     const form = this;
@@ -293,22 +325,28 @@ document.getElementById('addForm').addEventListener('submit', function (e) {
     btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Saving...';
 
     fetch('', { method: 'POST', body: new FormData(form) })
-        .then(res => res.json())
+        .then(async res => {
+            const text = await res.text();
+            try { return JSON.parse(text); } 
+            catch { throw new Error("Invalid server response"); }
+        })
         .then(data => {
             showToast(data.ok ? 'success' : 'error', data.message);
             if (data.ok) {
-                closeModal('addModal');
+                closeRequirementModal('addModal');
                 setTimeout(() => location.reload(), 1200);
             }
         })
-        .catch(() => showToast('error', 'Something went wrong. Please try again.'))
+        .catch((err) => {
+            console.error(err);
+            showToast('error', 'Server error. Please try again.')
+        })
         .finally(() => {
             btn.disabled  = false;
             btn.innerHTML = original;
         });
 });
 
-/* ── Toast ── */
 function showToast(type, message) {
     const existing = document.querySelector('.toast');
     if (existing) existing.remove();

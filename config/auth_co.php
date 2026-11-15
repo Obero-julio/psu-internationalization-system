@@ -1,5 +1,5 @@
-
 <?php
+declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -9,26 +9,185 @@ require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/db.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
+use PHPMailer\PHPMailer\Exception as PHPMailerException;
 
+/* =========================
+   MAIL CONFIGURATION
+   
+   ⚠️ DO NOT commit real credentials to GitHub.
+   Use environment variables OR a .env file loaded before this.
+   Fallbacks below are for local development only.
+========================= */
+if (!defined('MAIL_HOST'))      define('MAIL_HOST',     'smtp.gmail.com');
+if (!defined('MAIL_PORT'))      define('MAIL_PORT',     587);
+if (!defined('MAIL_USERNAME'))  define('MAIL_USERNAME', 'latorrewendy5@gmail.com');
+if (!defined('MAIL_PASSWORD'))  define('MAIL_PASSWORD', 'zxcyjvqajxwciqnd');
+if (!defined('MAIL_FROM_ADDR')) define('MAIL_FROM_ADDR','latorrewendy5@gmail.com');
+if (!defined('MAIL_FROM_NAME')) define('MAIL_FROM_NAME','PSU Internalization');
 
-if (!defined('MAIL_HOST'))      define('MAIL_HOST', 'smtp.example.com');
-if (!defined('MAIL_USERNAME'))  define('MAIL_USERNAME', 'no-reply@example.com');
-if (!defined('MAIL_PASSWORD'))  define('MAIL_PASSWORD', '');
-if (!defined('MAIL_PORT'))      define('MAIL_PORT', 587);
-if (!defined('MAIL_FROM_ADDR')) define('MAIL_FROM_ADDR', 'no-reply@psuinternalization.edu');
-if (!defined('MAIL_FROM_NAME')) define('MAIL_FROM_NAME', 'PSU Internalization');
+if (!defined('MAIL_DEBUG'))     define('MAIL_DEBUG',    false);
 
 /* How long a one-time passcode stays valid (minutes). */
 if (!defined('OTP_TTL_MINUTES')) define('OTP_TTL_MINUTES', 10);
 
-function e($value): string {
-    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+/* =========================
+   HELPERS
+========================= */
+if (!function_exists('e')) {
+    function e($value): string {
+        return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+    }
 }
 
+/* =========================
+   PASSWORD RESET — CORE
+========================= */
+if (!defined('OTP_MAX_ATTEMPTS')) define('OTP_MAX_ATTEMPTS', 5);
+
+function generateOTP(int $length = 6): string {
+    return str_pad((string)random_int(0, 10 ** $length - 1), $length, '0', STR_PAD_LEFT);
+}
+
+/**
+ * Create + email a reset OTP. Returns generic message always (no user enumeration).
+ */
+function requestPasswordReset(PDO $pdo, string $email): array {
+    $email = trim(strtolower($email));
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return ['ok' => false, 'message' => 'Please enter a valid email address.'];
+    }
+
+    // Rate limit: max 1 request per 60s per email
+    $stmt = $pdo->prepare(
+        'SELECT created_at FROM password_resets
+         WHERE email = ? AND created_at > (NOW() - INTERVAL 60 SECOND)
+         ORDER BY id DESC LIMIT 1'
+    );
+    $stmt->execute([$email]);
+    if ($stmt->fetch()) {
+        return ['ok' => false, 'message' => 'Please wait a minute before requesting another code.'];
+    }
+
+    $stmt = $pdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
+    $stmt->execute([$email]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    // Always say the same thing (don't leak whether email exists)
+    $generic = ['ok' => true, 'message' => 'If that email is registered, a reset code has been sent.'];
+
+    if (!$user) return $generic;
+
+    $otp = generateOTP(6);
+    $hash = password_hash($otp, PASSWORD_DEFAULT);
+
+    // Invalidate older unused codes for this email
+    $pdo->prepare('UPDATE password_resets SET used_at = NOW() WHERE email = ? AND used_at IS NULL')
+        ->execute([$email]);
+
+    $pdo->prepare(
+        'INSERT INTO password_resets (user_id, email, otp_hash, expires_at)
+         VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))'
+    )->execute([$user['id'], $email, $hash, OTP_TTL_MINUTES]);
+
+    $sent = sendPasswordResetOTP($email, $otp);
+    if (!$sent && !MAIL_DEBUG) {
+        return ['ok' => false, 'message' => 'Could not send email. Please try again later.'];
+    }
+    return $generic;
+}
+
+/**
+ * Verify OTP in real time. Returns ['ok'=>bool, 'message'=>string, 'token'=>?string]
+ * On success issues a short-lived reset token stored in session.
+ */
+function verifyResetOTP(PDO $pdo, string $email, string $otp): array {
+    $email = trim(strtolower($email));
+    $otp   = preg_replace('/\D/', '', $otp);
+
+    if (strlen($otp) !== 6) {
+        return ['ok' => false, 'message' => 'Enter the 6-digit code.'];
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT id, otp_hash, attempts FROM password_resets
+         WHERE email = ? AND used_at IS NULL AND expires_at > NOW()
+         ORDER BY id DESC LIMIT 1'
+    );
+    $stmt->execute([$email]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$row) {
+        return ['ok' => false, 'message' => 'Code expired or invalid. Request a new one.'];
+    }
+    if ((int)$row['attempts'] >= OTP_MAX_ATTEMPTS) {
+        return ['ok' => false, 'message' => 'Too many attempts. Request a new code.'];
+    }
+
+    if (!password_verify($otp, $row['otp_hash'])) {
+        $pdo->prepare('UPDATE password_resets SET attempts = attempts + 1 WHERE id = ?')
+            ->execute([$row['id']]);
+        return ['ok' => false, 'message' => 'Incorrect code. Please try again.'];
+    }
+
+    // Mark used + create session token for the reset step
+    $pdo->prepare('UPDATE password_resets SET used_at = NOW() WHERE id = ?')->execute([$row['id']]);
+    $token = bin2hex(random_bytes(32));
+    $_SESSION['reset_token']   = $token;
+    $_SESSION['reset_email']   = $email;
+    $_SESSION['reset_expires'] = time() + 300; // 5 min to set new password
+
+    return ['ok' => true, 'message' => 'Code verified.', 'token' => $token];
+}
+
+function resetPassword(PDO $pdo, string $token, string $newPassword): array {
+    if (empty($_SESSION['reset_token']) || !hash_equals($_SESSION['reset_token'], $token)) {
+        return ['ok' => false, 'message' => 'Invalid reset session. Please start over.'];
+    }
+    if (($_SESSION['reset_expires'] ?? 0) < time()) {
+        return ['ok' => false, 'message' => 'Reset session expired. Please start over.'];
+    }
+    if (strlen($newPassword) < 8) {
+        return ['ok' => false, 'message' => 'Password must be at least 8 characters.'];
+    }
+
+    $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+    $pdo->prepare('UPDATE users SET password = ? WHERE email = ?')
+        ->execute([$hash, $_SESSION['reset_email']]);
+
+    // Cleanup
+    $pdo->prepare('DELETE FROM password_resets WHERE email = ?')
+        ->execute([$_SESSION['reset_email']]);
+    unset($_SESSION['reset_token'], $_SESSION['reset_email'], $_SESSION['reset_expires']);
+
+    return ['ok' => true, 'message' => 'Password updated. You can now log in.'];
+}
+
+/**
+ * Sends a password reset OTP via SMTP (PHPMailer).
+ * Returns true on success, false on any failure.
+ * Never throws.
+ */
 function sendPasswordResetOTP(string $toEmail, string $otp): bool {
+
+    /* ---- Dev mode: log instead of send ---- */
+    if (MAIL_DEBUG) {
+        error_log("[MAIL_DEBUG] OTP for {$toEmail}: {$otp}");
+        return true;
+    }
+
+    /* ---- Validate config before trying ---- */
+    if (MAIL_USERNAME === '' || MAIL_PASSWORD === '') {
+        error_log('[sendPasswordResetOTP] SMTP credentials are not configured.');
+        return false;
+    }
+
     $mail = new PHPMailer(true);
+
     try {
+
+        //$mail->SMTPDebug  = 2;
+        //$mail->Debugoutput = 'error_log';
+
         $mail->isSMTP();
         $mail->Host       = MAIL_HOST;
         $mail->SMTPAuth   = true;
@@ -36,34 +195,61 @@ function sendPasswordResetOTP(string $toEmail, string $otp): bool {
         $mail->Password   = MAIL_PASSWORD;
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = MAIL_PORT;
+        $mail->Timeout    = 15;   // seconds — prevents hanging on network issues
 
+        /* Use a valid From address matching the SMTP username — 
+           many providers reject mismatched From (especially Gmail). */
         $mail->setFrom(MAIL_FROM_ADDR, MAIL_FROM_NAME);
+        $mail->addReplyTo(MAIL_FROM_ADDR, MAIL_FROM_NAME);
         $mail->addAddress($toEmail);
 
         $mail->isHTML(true);
         $mail->Subject = 'Your PSU Internalization password reset code';
-        $mail->Body    =
-            '<div style="font-family:Arial,Helvetica,sans-serif;color:#1e2740;line-height:1.6">'
+
+        $safeOtp = htmlspecialchars($otp, ENT_QUOTES, 'UTF-8');
+        $ttl     = (int)OTP_TTL_MINUTES;
+        
+        // Create the magic link
+        $link = "http://localhost/internalization_management/users/reset_password.php?email=" . urlencode($toEmail) . "&otp=" . urlencode($otp);
+
+        $mail->Body =
+            '<div style="font-family:Arial,Helvetica,sans-serif;color:#1e2740;line-height:1.6;max-width:520px">'
+          . '<h2 style="color:#0b1f4a;margin:0 0 12px;font-size:20px">Password Reset Request</h2>'
           . '<p>Use the code below to reset your PSU Internalization password:</p>'
-          . '<p style="font-size:30px;font-weight:bold;letter-spacing:8px;color:#0b1f4a;margin:16px 0">'
-          . htmlspecialchars($otp, ENT_QUOTES, 'UTF-8') . '</p>'
-          . '<p>This code expires in ' . (int)OTP_TTL_MINUTES . ' minutes. '
+          . '<p style="font-size:30px;font-weight:bold;letter-spacing:8px;color:#0b1f4a;margin:16px 0;'
+          . 'padding:12px 20px;background:#f0f4ff;border-radius:8px;text-align:center;display:inline-block">'
+          . $safeOtp . '</p>'
+          . '<p style="margin: 24px 0;">'
+          . '<a href="' . $link . '" style="background:#0b1f4a;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;">Click here to reset your password</a>'
+          . '</p>'
+          . '<p style="color:#64748b;font-size:13px">This link and code expire in ' . $ttl . ' minutes. '
           . 'If you didn\'t request this, you can safely ignore this email.</p>'
           . '</div>';
-        $mail->AltBody = "Your PSU Internalization password reset code is: {$otp}\n"
-                       . "It expires in " . (int)OTP_TTL_MINUTES . " minutes.";
+
+        $mail->AltBody =
+            "PSU Internalization password reset\n"
+          . "----------------------------------\n"
+          . "Your verification code is: {$otp}\n"
+          . "It expires in {$ttl} minutes.\n"
+          . "If you didn't request this, ignore this email.\n";
 
         $mail->send();
         return true;
-    } catch (Exception $ex) {
-        error_log('Password reset OTP email failed: ' . $mail->ErrorInfo);
+
+    } catch (PHPMailerException $ex) {
+        error_log('[sendPasswordResetOTP] PHPMailer: ' . $mail->ErrorInfo);
+        return false;
+
+    } catch (\Throwable $ex) {
+        error_log('[sendPasswordResetOTP] Unexpected: ' . $ex->getMessage());
         return false;
     }
 }
 
-/* Inline SVG icons used across the forms. */
+/* =========================
+   ICON HELPER
+========================= */
 function icon(string $name): string {
-    $a = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
     $paths = [
         'user'  => '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
         'lock'  => '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
@@ -78,13 +264,17 @@ function icon(string $name): string {
         'medal' => '<circle cx="12" cy="8" r="6"/><path d="M8.2 13.9 7 22l5-3 5 3-1.2-8.1"/>',
         'arrow' => '<line x1="3" y1="12" x2="21" y2="12"/><polyline points="14 5 21 12 14 19"/>',
     ];
-    $sw = $name === 'arrow' ? ' stroke-width="2"' : '';
-    return '<svg ' . str_replace(' stroke-width="1.8"', $sw ?: ' stroke-width="1.8"', $a) . '>' . ($paths[$name] ?? '') . '</svg>';
+    $strokeWidth = ($name === 'arrow') ? '2' : '1.8';
+    return sprintf(
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="%s" stroke-linecap="round" stroke-linejoin="round">%s</svg>',
+        $strokeWidth,
+        $paths[$name] ?? ''
+    );
 }
 
-/**
- * Opens the page: <head>, card, left form panel and mobile brand.
- */
+/* =========================
+   AUTH PAGE SHELL (for login/register pages)
+========================= */
 function auth_open(string $title): void { ?>
 <!doctype html>
 <html lang="en">
@@ -107,9 +297,6 @@ function auth_open(string $title): void { ?>
           </div>
 <?php }
 
-/**
- * Closes the form panel, renders the welcome panel and the scripts.
- */
 function auth_close(string $label, string $titleHtml, string $text): void { ?>
           <div class="auth-footer">&copy; 2026 Pangasinan State University · PSU Internalization</div>
         </div>
@@ -121,7 +308,7 @@ function auth_close(string $label, string $titleHtml, string $text): void { ?>
           </div>
 
           <div class="welcome-label"><?= e($label) ?></div>
-          <h2 class="welcome-title"><?= $titleHtml /* trusted static markup */ ?></h2>
+          <h2 class="welcome-title"><?= $titleHtml ?></h2>
           <p class="welcome-text"><?= e($text) ?></p>
 
           <div class="welcome-features">

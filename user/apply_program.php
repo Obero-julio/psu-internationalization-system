@@ -13,59 +13,47 @@ function e($value)
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
-/* AVAILABLE PROGRAMS */
+/* 
+ * AVAILABLE PROGRAMS 
+ * We need to JOIN partners and countries to get the actual names.
+ */
 $stmt = $pdo->query("
-    SELECT *
-    FROM programs
-    ORDER BY created_at DESC
+    SELECT 
+        p.*, 
+        pr.institution_name AS partner_institution, 
+        c.country_name AS country
+    FROM programs p
+    LEFT JOIN partners pr ON pr.id = p.partner_id
+    LEFT JOIN countries c ON c.id = p.country_id
+    WHERE p.start_date >= CURDATE() 
+    ORDER BY p.created_at DESC
 ");
-
 $programs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $success = '';
 $errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-
-    $program_id   = (int)($_POST['program_id'] ?? 0);
-    $reason       = trim($_POST['reason'] ?? '');
+    $program_id = (int)($_POST['program_id'] ?? 0);
+    $reason     = trim($_POST['reason'] ?? '');
 
     if (!$program_id) {
         $errors[] = 'Please select a program.';
     }
-
     if (!$reason) {
         $errors[] = 'Statement of purpose is required.';
+    } elseif (strlen($reason) > 500) {
+        $errors[] = 'Statement of purpose cannot exceed 500 characters.';
     }
 
     if (empty($errors)) {
-$stmt = $pdo->prepare("
-    INSERT INTO applications
-    (
-        applicant_id,
-        program_id,
-        reason,
-        status,
-        created_at
-    )
-    VALUES
-    (
-        ?,
-        ?,
-        ?,
-        'Pending',
-        NOW()
-    )
-");
-
-$stmt->execute([
-    $user_id,
-    $program_id,
-    $reason
-]);
-
-
-        $success = 'Application submitted successfully.';
+        $stmt = $pdo->prepare("
+            INSERT INTO applications
+            (applicant_id, program_id, reason, status, created_at)
+            VALUES (?, ?, ?, 'Pending', NOW())
+        ");
+        $stmt->execute([$user_id, $program_id, $reason]);
+        $success = 'Application submitted successfully. We will notify you once it has been reviewed.';
     }
 }
 ?>
@@ -80,161 +68,105 @@ $stmt->execute([
         </div>
         <div>
             <h2>Apply for a Mobility Program</h2>
-            <p>Select an available program and submit your application.</p>
+            <p>Select an available program from the list below and submit your application.</p>
         </div>
-    </div>
-
-    <!-- AVAILABLE PROGRAMS -->
-
-    <div class="program-section">
-
-        <h3 class="section-title">
-            <i class="fa-solid fa-graduation-cap"></i>
-            Available Programs
-        </h3>
-
-        <div class="program-grid">
-
-            <?php foreach ($programs as $program): ?>
-
-                <div class="program-card">
-
-                    <div class="program-card-header">
-                        <h4><?= e($program['program_name']) ?></h4>
-                    </div>
-
-                    <div class="program-card-body">
-
-                        <p>
-                            <?= e($program['description']) ?>
-                        </p>
-
-                        <div class="program-meta">
-                            <span>
-                                <i class="fa-solid fa-building"></i>
-                                <?= e($program['partner_institution']) ?>
-                            </span>
-
-                            <span>
-                                <i class="fa-solid fa-location-dot"></i>
-                                <?= e($program['country']) ?>
-                            </span>
-
-                            <span>
-                                <i class="fa-solid fa-calendar"></i>
-                                <?= e($program['start_date']) ?>
-                                -
-                                <?= e($program['end_date']) ?>
-                            </span>
-                        </div>
-
-                    </div>
-
-                </div>
-
-            <?php endforeach; ?>
-
-        </div>
-
     </div>
 
     <?php if ($success): ?>
         <div class="alert alert-success">
             <i class="fa-solid fa-circle-check"></i>
-            <?= e($success) ?>
+            <span><?= e($success) ?></span>
         </div>
     <?php endif; ?>
 
     <?php if (!empty($errors)): ?>
         <div class="alert alert-error">
-            <?php foreach ($errors as $error): ?>
-                <div><?= e($error) ?></div>
-            <?php endforeach; ?>
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <div>
+                <?php foreach ($errors as $error): ?>
+                    <div><?= e($error) ?></div>
+                <?php endforeach; ?>
+            </div>
         </div>
     <?php endif; ?>
 
     <!-- APPLICATION FORM -->
-
     <form method="POST" class="apply-form">
 
         <div class="form-group">
-
-            <label>Select Program</label>
-
-            <select
-                name="program_id"
-                id="programSelect"
-                required
-            >
-                <option value="">Choose a Program</option>
-
+            <label for="programSelect">Select Program <span class="required">*</span></label>
+            <select name="program_id" id="programSelect" required>
+                <option value="" disabled selected>Choose a Program...</option>
                 <?php foreach ($programs as $program): ?>
-
                     <option
                         value="<?= $program['id'] ?>"
-                        data-country="<?= e($program['country']) ?>"
-                        data-partner="<?= e($program['partner_institution']) ?>"
+                        data-country="<?= e($program['country'] ?? 'N/A') ?>"
+                        data-partner="<?= e($program['partner_institution'] ?? 'N/A') ?>"
                         data-start="<?= e($program['start_date']) ?>"
                         data-end="<?= e($program['end_date']) ?>"
                     >
                         <?= e($program['program_name']) ?>
                     </option>
-
                 <?php endforeach; ?>
-
             </select>
-
+            <?php if (empty($programs)): ?>
+                <small class="form-hint" style="color: var(--red);">No open programs available right now. Check back later.</small>
+            <?php endif; ?>
         </div>
 
         <div class="form-row">
-
             <div class="form-group">
                 <label>Partner Institution</label>
-                <input type="text" id="partner" readonly>
+                <div class="input-icon-wrapper">
+                    <i class="fa-solid fa-building"></i>
+                    <input type="text" id="partner" placeholder="Auto-filled based on selection" readonly>
+                </div>
             </div>
 
             <div class="form-group">
                 <label>Country</label>
-                <input type="text" id="country" readonly>
+                <div class="input-icon-wrapper">
+                    <i class="fa-solid fa-location-dot"></i>
+                    <input type="text" id="country" placeholder="Auto-filled based on selection" readonly>
+                </div>
             </div>
-
         </div>
 
         <div class="form-row">
-
             <div class="form-group">
                 <label>Start Date</label>
-                <input type="text" id="startDate" readonly>
+                <div class="input-icon-wrapper">
+                    <i class="fa-regular fa-calendar"></i>
+                    <input type="text" id="startDate" placeholder="Auto-filled" readonly>
+                </div>
             </div>
 
             <div class="form-group">
                 <label>End Date</label>
-                <input type="text" id="endDate" readonly>
+                <div class="input-icon-wrapper">
+                    <i class="fa-regular fa-calendar-check"></i>
+                    <input type="text" id="endDate" placeholder="Auto-filled" readonly>
+                </div>
             </div>
-
         </div>
 
         <div class="form-group">
-
-            <label>Statement of Purpose</label>
-
+            <label for="reason">Statement of Purpose <span class="required">*</span></label>
             <textarea
                 name="reason"
+                id="reason"
                 rows="5"
                 maxlength="500"
-                placeholder="Explain why you want to join this mobility program..."
+                placeholder="Explain why you want to join this mobility program, how it aligns with your studies, and what you hope to achieve..."
                 required
             ></textarea>
-
+            <div class="char-count"><span id="charCount">0</span> / 500 characters</div>
         </div>
 
         <div class="form-footer">
-
-            <button type="submit" class="btn">
-                <i class="fa-solid fa-paper-plane"></i>
-                Submit Application
+            <button type="submit" class="btn-primary" <?= empty($programs) ? 'disabled' : '' ?>>
+                <i class="fa-solid fa-paper-plane"></i> Submit Application
             </button>
-
         </div>
 
     </form>
@@ -243,21 +175,36 @@ $stmt->execute([
 
 <script>
 const select = document.getElementById('programSelect');
+const partnerInput = document.getElementById('partner');
+const countryInput = document.getElementById('country');
+const startDateInput = document.getElementById('startDate');
+const endDateInput = document.getElementById('endDate');
+const reasonInput = document.getElementById('reason');
+const charCount = document.getElementById('charCount');
+
+// Format dates beautifully (e.g., "Jun 1, 2024")
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
 
 select.addEventListener('change', function () {
-
     const option = this.options[this.selectedIndex];
+    
+    partnerInput.value = option.dataset.partner || '';
+    countryInput.value = option.dataset.country || '';
+    startDateInput.value = formatDate(option.dataset.start);
+    endDateInput.value = formatDate(option.dataset.end);
+});
 
-    document.getElementById('partner').value =
-        option.dataset.partner || '';
-
-    document.getElementById('country').value =
-        option.dataset.country || '';
-
-    document.getElementById('startDate').value =
-        option.dataset.start || '';
-
-    document.getElementById('endDate').value =
-        option.dataset.end || '';
+// Character counter for the textarea
+reasonInput.addEventListener('input', function() {
+    charCount.textContent = this.value.length;
+    if (this.value.length >= 500) {
+        charCount.style.color = 'var(--red)';
+    } else {
+        charCount.style.color = 'var(--gray-500)';
+    }
 });
 </script>

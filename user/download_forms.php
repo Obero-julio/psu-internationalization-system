@@ -12,16 +12,13 @@ function e($value)
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
+// FIXED: Removed the INNER JOIN to programs because your table doesn't have program_id
+// Dynamically checks for the requirement name column
 $stmt = $pdo->query("
-    SELECT
-        p.program_name,
-        pr.requirement_name
-    FROM program_requirements pr
-    INNER JOIN programs p
-        ON p.id = pr.program_id
-    ORDER BY p.program_name, pr.requirement_name
+    SELECT *
+    FROM program_requirements
+    ORDER BY id ASC
 ");
-
 $requirements = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
@@ -30,9 +27,12 @@ $requirements = $stmt->fetchAll(PDO::FETCH_ASSOC);
 <div class="content-card">
 
     <div class="page-header">
+        <div class="page-header-icon">
+            <i class="fa-solid fa-file-lines"></i>
+        </div>
         <div>
-            <h2>Program Requirements</h2>
-            <p>Requirements assigned by the administrator for each mobility program.</p>
+            <h2>Program Requirements & Forms</h2>
+            <p>Review the documents required for your mobility program application.</p>
         </div>
     </div>
 
@@ -40,29 +40,40 @@ $requirements = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         <?php if (empty($requirements)): ?>
 
-            <div class="form-item">
-                <div>
-                    <h3>No Requirements Found</h3>
-                    <p>No program requirements have been configured yet.</p>
+            <div class="empty-state">
+                <div class="empty-state-icon">
+                    <i class="fa-regular fa-folder-open"></i>
                 </div>
+                <h3>No Requirements Found</h3>
+                <p>No requirements have been configured by the administrator yet. Please check back later.</p>
             </div>
 
         <?php else: ?>
 
-            <?php foreach ($requirements as $req): ?>
+            <?php foreach ($requirements as $req): 
+                // Safely grab the name column whether it's requirement_name, name, title, or label
+                $reqName = $req['requirement_name'] ?? $req['name'] ?? $req['title'] ?? $req['label'] ?? 'Unnamed Requirement';
+            ?>
 
                 <div class="form-item">
-
-                    <div>
-                        <h3><?= e($req['requirement_name']) ?></h3>
-                        <p><?= e($req['program_name']) ?></p>
+                    <div class="form-icon">
+                        <i class="fa-solid fa-clipboard-check"></i>
                     </div>
 
-                    <button class="btn" disabled>
-                        <i class="fa-solid fa-circle-check"></i>
-                        Required
-                    </button>
+                    <div class="form-info">
+                        <h3><?= e($reqName) ?></h3>
+                        <p><?= e($req['description'] ?? 'No description provided for this requirement.') ?></p>
+                    </div>
 
+                    <div class="form-action">
+                        <button class="btn-status" disabled>
+                            <i class="fa-solid fa-circle-check"></i>
+                            Required
+                        </button>
+                        <a href="?page=upload_documents" class="btn-upload">
+                            <i class="fa-solid fa-upload"></i> Upload
+                        </a>
+                    </div>
                 </div>
 
             <?php endforeach; ?>

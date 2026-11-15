@@ -1,87 +1,247 @@
-﻿/* Row 2 (Users / Approval Rate) + the two charts + the side column,
-   arranged to match the reference layout via named grid areas */
-.overview-grid{
-    display:grid;
-    grid-template-columns:1fr 1fr 340px;
-    grid-template-rows:auto 1fr;
-    gap:18px;
-    grid-template-areas:
-        "users approval side"
-        "linechart donutchart side";
-    margin-bottom:22px;
+﻿/* =========================================
+   APPLICATION REPORTS / STATUS PAGE
+   ========================================= */
+
+.report-page {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    padding: 32px 0 48px;
 }
-.card-users{grid-area:users;}
-.card-approval{grid-area:approval;}
-.linechart-panel{grid-area:linechart; margin-bottom:0;}
-.donutchart-panel{grid-area:donutchart; margin-bottom:0;}
-.side-col{grid-area:side; display:flex; flex-direction:column; gap:18px;}
-.side-col .panel{margin-bottom:0;}
 
-.view-all-link{font-size:12.5px; font-weight:600; color:var(--blue); text-decoration:none;}
-.view-all-link:hover{text-decoration:underline;}
-
-/* Sparkline strip under each stat card's delta */
-.stat-sparkline{height:28px; margin-top:8px;}
-.stat-sparkline canvas{width:100% !important; height:28px !important;}
-.stat-delta .delta-label{font-weight:400; color:var(--text-soft);}
-.stat-delta i{font-size:11px;}
-
-/* Donut: center total overlay + right-hand legend list (uses your
-   existing .legend-dot success/warning/danger colors) */
-.donut-wrap{display:flex; align-items:center; gap:20px;}
-.donut-canvas-wrap{position:relative; flex:0 0 180px; height:180px;}
-.donut-canvas-wrap canvas{width:100% !important; height:100% !important;}
-.donut-center{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center;}
-.donut-total{display:block; font-size:22px; font-weight:600; color:var(--ink);}
-.donut-total-label{font-size:11.5px; color:var(--text-soft);}
-.donut-legend{list-style:none; margin:0; padding:0; flex:1; display:flex; flex-direction:column; gap:14px;}
-.donut-legend li{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text);}
-.donut-legend .legend-name{flex:1;}
-.donut-legend .legend-count{font-weight:600; color:var(--ink);}
-.donut-legend .legend-pct{color:var(--text-soft);}
-
-/* Quick actions */
-.quick-actions-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:18px;}
-.quick-action{
-    display:flex; gap:10px; align-items:flex-start; padding:12px; border-radius:var(--radius-sm);
-    border:1px solid var(--border); text-decoration:none; transition:background .15s ease, border-color .15s ease;
+/* HEADER */
+.report-head {
+    margin-bottom: 8px;
 }
-.quick-action:hover{background:var(--bg); border-color:var(--blue-light);}
-.qa-icon{width:34px; height:34px; font-size:14px;}
-.qa-text{display:flex; flex-direction:column; gap:2px;}
-.qa-title{font-size:13px; font-weight:600; color:var(--ink);}
-.qa-sub{font-size:11.5px; color:var(--text-soft);}
-
-/* Upcoming deadlines list */
-.deadline-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px;}
-.deadline-list li{display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:8px 0; border-bottom:1px solid var(--border);}
-.deadline-list li:last-child{border-bottom:none;}
-.deadline-name{color:var(--ink); font-weight:600;}
-.deadline-date{color:var(--text-soft); white-space:nowrap;}
-.deadlines-empty{padding:32px 12px;}
-
-/* Bottom row: recent applications table + system overview */
-.bottom-grid{display:grid; grid-template-columns:2fr 1fr; gap:18px;}
-.bottom-grid .panel{margin-bottom:0;}
-.applicant-cell{display:flex; flex-direction:column;}
-.applicant-name{font-weight:600; color:var(--ink);}
-.applicant-email{font-size:12px; color:var(--text-soft);}
-
-.system-overview-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
-.so-item{display:flex; align-items:center; gap:10px;}
-.so-icon{width:36px; height:36px; font-size:14px;}
-.so-text{display:flex; flex-direction:column; gap:2px;}
-.so-label{font-size:11.5px; color:var(--text-soft);}
-.so-value{font-size:14px; font-weight:600; color:var(--ink);}
-.so-value.so-good{color:var(--success);}
-
-@media (max-width:1200px){
-    .overview-grid{grid-template-columns:1fr 1fr; grid-template-areas:"users approval" "linechart linechart" "donutchart donutchart" "side side";}
-    .bottom-grid{grid-template-columns:1fr;}
+.report-head h1 {
+    font-size: clamp(1.6rem, 2.5vw, 2rem);
+    font-weight: 800;
+    color: var(--navy-800);
+    letter-spacing: -0.02em;
 }
-@media (max-width:640px){
-    .overview-grid{grid-template-columns:1fr; grid-template-areas:"users" "approval" "linechart" "donutchart" "side";}
-    .quick-actions-grid{grid-template-columns:1fr;}
-    .system-overview-grid{grid-template-columns:1fr;}
-    .donut-wrap{flex-direction:column;}
+.report-head .lead {
+    margin-top: 8px;
+    font-size: 0.95rem;
+    color: var(--gray-500);
+    max-width: 600px;
+}
+
+/* ALERT */
+.report-alert {
+    padding: 16px 20px;
+    border-radius: 14px;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+    font-size: 0.9rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: var(--shadow-sm);
+}
+
+/* =========================================
+   SUMMARY CARDS (Top Row)
+   ========================================= */
+.report-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.report-summary-card {
+    padding: 24px;
+    border-radius: 20px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.report-summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+    border-color: var(--gray-300);
+}
+
+/* Subtle top accent line for the cards */
+.report-summary-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--gray-200);
+    border-radius: 20px 20px 0 0;
+}
+.report-summary-card:nth-child(1)::before { background: var(--orange); } /* In Review */
+.report-summary-card:nth-child(2)::before { background: var(--purple); } /* Pending */
+.report-summary-card:nth-child(3)::before { background: var(--green); }  /* Approved */
+.report-summary-card:nth-child(4)::before { background: var(--red); }    /* Rejected */
+
+.report-summary-card h3 {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--gray-500);
+    font-weight: 700;
+    margin: 0;
+}
+
+.report-summary-card .big {
+    font-family: var(--font-display);
+    font-size: 2.8rem;
+    font-weight: 800;
+    color: var(--navy-800);
+    line-height: 1;
+    margin: 8px 0;
+}
+
+.report-summary-card .sub {
+    font-size: 0.85rem;
+    color: var(--gray-500);
+    font-weight: 500;
+}
+
+/* =========================================
+   DATA TABLE PANEL
+   ========================================= */
+.report-table-panel {
+    padding: 0;
+    border-radius: 20px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden; /* Keeps the table borders inside the rounded corners */
+}
+
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+/* Table Headers */
+.report-table th {
+    padding: 18px 24px;
+    background: var(--gray-50);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gray-500);
+    border-bottom: 1px solid var(--gray-200);
+    white-space: nowrap;
+}
+
+/* Table Cells */
+.report-table td {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--gray-100);
+    vertical-align: middle;
+    font-size: 0.9rem;
+    color: var(--gray-700);
+}
+
+/* Row Hover Effect */
+.report-table tbody tr {
+    transition: background-color 0.15s ease;
+}
+.report-table tbody tr:hover {
+    background-color: var(--gray-50);
+}
+.report-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Program Column with Thumbnail */
+.report-program {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.report-thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    object-fit: cover;
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    flex-shrink: 0;
+}
+
+.report-program strong {
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    color: var(--navy-800);
+    font-weight: 700;
+    display: block;
+    max-width: 250px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Status Tags (Using inline styles from PHP for colors, but we set the shape here) */
+.status-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+/* Empty State */
+.report-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--gray-500);
+    font-size: 0.95rem;
+}
+
+.report-empty i {
+    font-size: 2.5rem;
+    color: var(--gray-300);
+    margin-bottom: 8px;
+}
+
+.report-empty a {
+    color: var(--blue);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    transition: color 0.2s;
+}
+
+.report-empty a:hover {
+    color: var(--navy-800);
+}
+
+/* =========================================
+   RESPONSIVE DESIGN
+   ========================================= */
+@media (max-width: 900px) {
+    .report-table-panel {
+        overflow-x: auto;
+    }
+    .report-table {
+        min-width: 800px; /* Forces scroll on small screens instead of squishing */
+    }
 }

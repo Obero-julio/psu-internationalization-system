@@ -1,309 +1,503 @@
-<?php
-require_once __DIR__ . '/../config/auth_co.php';
+﻿<?php
+session_start();
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../config/db.php';
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
 
-/* Fallback escaper in case auth_co.php does not define e(). */
-if (!function_exists('e')) {
-    function e(?string $v): string
-    {
-        return htmlspecialchars($v ?? '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+/* ------------------------------------------------------------------
+ * MAIL CONFIG
+ * ------------------------------------------------------------------ */
+if (!defined('MAIL_HOST'))        define('MAIL_HOST', 'smtp.example.com');
+if (!defined('MAIL_USERNAME'))    define('MAIL_USERNAME', 'no-reply@example.com');
+if (!defined('MAIL_PASSWORD'))    define('MAIL_PASSWORD', '');
+if (!defined('MAIL_PORT'))        define('MAIL_PORT', 587);
+if (!defined('MAIL_FROM_ADDR'))   define('MAIL_FROM_ADDR', 'no-reply@psuinternalization.edu');
+if (!defined('MAIL_FROM_NAME'))   define('MAIL_FROM_NAME', 'PSU Internalization');
+if (!defined('APP_BASE_URL'))     define('APP_BASE_URL', (isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST']);
+
+function sendPasswordResetEmail(string $toEmail, string $resetToken): bool {
+    $resetLink = rtrim(APP_BASE_URL, '/') . '/reset.php?token=' . urlencode($resetToken);
+
+    $mail = new PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host       = MAIL_HOST;
+        $mail->SMTPAuth   = true;
+        $mail->Username   = MAIL_USERNAME;
+        $mail->Password   = MAIL_PASSWORD;
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = MAIL_PORT;
+
+        $mail->setFrom(MAIL_FROM_ADDR, MAIL_FROM_NAME);
+        $mail->addAddress($toEmail);
+
+        $mail->isHTML(true);
+        $mail->Subject = 'Reset your PSU Internalization password';
+        $mail->Body    = '
+            <p>We received a request to reset your password.</p>
+            <p><a href="' . htmlspecialchars($resetLink, ENT_QUOTES, 'UTF-8') . '">Click here to reset your password</a></p>
+            <p>This link expires in 1 hour. If you didn\'t request this, you can ignore this email.</p>
+        ';
+        $mail->AltBody = "Reset your password: {$resetLink} (expires in 1 hour)";
+
+        $mail->send();
+        return true;
+    } catch (Exception $e) {
+        error_log('Password reset email failed: ' . $mail->ErrorInfo);
+        return false;
     }
-}
-
-const MAX_ATTEMPTS    = 5;    // wrong codes allowed per request
-const RESEND_COOLDOWN = 60;   // seconds between code emails
-const MIN_PASS        = 8;
-const MAX_PASS        = 72;   // bcrypt only uses the first 72 bytes
-
-function mask_email(string $email): string
-{
-    $parts = explode('@', $email, 2);
-    if (count($parts) !== 2) {
-        return $email;
-    }
-    return mb_substr($parts[0], 0, 1) . str_repeat('•', max(2, mb_strlen($parts[0]) - 1)) . '@' . $parts[1];
 }
 
 $pdo = db();
 
-if (empty($_SESSION['csrf'])) {
-    $_SESSION['csrf'] = bin2hex(random_bytes(32));
+function e($value): string {
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
-/* Two steps: "request" (enter email) and "verify" (enter code + new password).
- * The pending email is remembered in the session between steps. */
+/* ==================================================================
+ * STATE VARIABLES
+ * ================================================================== */
 $forgot_error   = '';
 $forgot_message = '';
-$forgot_email   = $_SESSION['pw_reset_email'] ?? '';
-$forgot_step    = !empty($_SESSION['pw_reset_email']) ? 'verify' : 'request';
+$forgot_email   = '';
 
+/* ==================================================================
+ * POST HANDLING
+ * ================================================================== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $forgot_email = trim($_POST['email'] ?? '');
+    $email = filter_var($forgot_email, FILTER_VALIDATE_EMAIL);
 
-    $forgot_action = $_POST['forgot_action'] ?? 'request';
+    if (!$email) {
+        $forgot_error = 'Please enter a valid email address.';
+    } else {
+        try {
+            $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ? AND user_role IN ('applicant', 'ap') LIMIT 1");
+            $stmt->execute([$email]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!hash_equals($_SESSION['csrf'], $_POST['csrf'] ?? '')) {
-        $forgot_error = 'Your session expired. Please try again.';
-
-    /* ----- change email: drop the pending session, back to step 1 ----- */
-    } elseif ($forgot_action === 'change_email') {
-        unset($_SESSION['pw_reset_email'], $_SESSION['pw_reset_attempts']);
-        $forgot_email = '';
-        $forgot_step  = 'request';
-
-    /* ----- send / resend the code ----- */
-    } elseif ($forgot_action === 'request' || $forgot_action === 'resend') {
-
-        $inputEmail = $forgot_action === 'resend'
-            ? ($_SESSION['pw_reset_email'] ?? '')
-            : strtolower(trim($_POST['email'] ?? ''));
-        $email    = filter_var($inputEmail, FILTER_VALIDATE_EMAIL);
-        $waitLeft = RESEND_COOLDOWN - (time() - (int)($_SESSION['pw_reset_last_sent'] ?? 0));
-
-        if (!$email) {
-            $forgot_error = 'Please enter a valid email address.';
-            $forgot_step  = 'request';
-        } elseif ($waitLeft > 0) {
-            $forgot_error = "Please wait {$waitLeft} seconds before requesting another code.";
-            $forgot_step  = $forgot_action === 'resend' ? 'verify' : 'request';
-        } else {
-            try {
-                $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ? AND user_role IN ('applicant', 'ap') LIMIT 1");
-                $stmt->execute([$email]);
-                $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-                // Only generate + email a code when the account exists, but
-                // always advance and show the same message either way so we
-                // never leak which addresses are registered.
-                if ($user) {
-                    $otp          = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-                    $token_expiry = date('Y-m-d H:i:s', strtotime('+' . (int)OTP_TTL_MINUTES . ' minutes'));
-
-                    $pdo->prepare('UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?')
-                        ->execute([hash('sha256', $otp), $token_expiry, $user['id']]);
-
-                    sendPasswordResetOTP($email, $otp);
-                }
-
-                $_SESSION['pw_reset_email']     = $email;
-                $_SESSION['pw_reset_attempts']  = 0;
-                $_SESSION['pw_reset_last_sent'] = time();
-                $forgot_email   = $email;
-                $forgot_step    = 'verify';
-                $forgot_message = "If an account exists for that email, we've sent a 6-digit verification code.";
-
-            } catch (PDOException $ex) {
-                error_log('Forgot password request failed: ' . $ex->getMessage());
-                $forgot_error = 'System error. Please try again later.';
-                $forgot_step  = 'request';
+            if ($user) {
+                $reset_token  = bin2hex(random_bytes(32));
+                $token_expiry = date('Y-m-d H:i:s', strtotime('+1 hour'));
+                
+                $update = $pdo->prepare("UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?");
+                $update->execute([hash('sha256', $reset_token), $token_expiry, $user['id']]);
+                
+                sendPasswordResetEmail($email, $reset_token);
             }
-        }
-
-    /* ----- verify code + set the new password ----- */
-    } elseif ($forgot_action === 'verify') {
-
-        $email = filter_var($_SESSION['pw_reset_email'] ?? '', FILTER_VALIDATE_EMAIL);
-        $otp   = preg_replace('/\D/', '', implode('', (array)($_POST['otp'] ?? [])));
-        $new   = $_POST['password'] ?? '';
-        $conf  = $_POST['confirm_password'] ?? '';
-        $forgot_email = $email ?: '';
-        $forgot_step  = 'verify';
-
-        if (!$email) {
-            $forgot_error = 'Your session expired. Please start again.';
-            unset($_SESSION['pw_reset_email'], $_SESSION['pw_reset_attempts']);
-            $forgot_step  = 'request';
-        } elseif (($_SESSION['pw_reset_attempts'] ?? 0) >= MAX_ATTEMPTS) {
-            $forgot_error = 'Too many incorrect attempts. Please request a new code.';
-        } elseif (strlen($otp) !== 6) {
-            $forgot_error = 'Please enter the 6-digit code from your email.';
-        } elseif (strlen($new) < MIN_PASS) {
-            $forgot_error = 'Your new password must be at least ' . MIN_PASS . ' characters.';
-        } elseif (strlen($new) > MAX_PASS) {
-            $forgot_error = 'Your new password must be at most ' . MAX_PASS . ' characters.';
-        } elseif (!preg_match('/[A-Za-z]/', $new) || !preg_match('/\d/', $new)) {
-            $forgot_error = 'Your new password must include at least one letter and one number.';
-        } elseif ($new !== $conf) {
-            $forgot_error = 'Passwords do not match.';
-        } else {
-            try {
-                $stmt = $pdo->prepare('
-                    SELECT id FROM users
-                    WHERE email = ?
-                      AND reset_token = ?
-                      AND reset_token_expiry IS NOT NULL
-                      AND reset_token_expiry > NOW()
-                    LIMIT 1
-                ');
-                $stmt->execute([$email, hash('sha256', $otp)]);
-                $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-                if (!$user) {
-                    $_SESSION['pw_reset_attempts'] = ($_SESSION['pw_reset_attempts'] ?? 0) + 1;
-                    $left = MAX_ATTEMPTS - $_SESSION['pw_reset_attempts'];
-
-                    if ($left <= 0) {
-                        // Burn the code so it can't be guessed any further.
-                        $pdo->prepare('UPDATE users SET reset_token = NULL, reset_token_expiry = NULL WHERE email = ?')
-                            ->execute([$email]);
-                        $forgot_error = 'Too many incorrect attempts. Please request a new code.';
-                    } else {
-                        $forgot_error = "That code is invalid or has expired. {$left} attempt" . ($left === 1 ? '' : 's') . ' left.';
-                    }
-                } else {
-                    $pdo->prepare('
-                        UPDATE users
-                        SET password_hash = ?, reset_token = NULL, reset_token_expiry = NULL
-                        WHERE id = ?
-                    ')->execute([password_hash($new, PASSWORD_DEFAULT), $user['id']]);
-
-                    unset($_SESSION['pw_reset_email'], $_SESSION['pw_reset_attempts'], $_SESSION['pw_reset_last_sent']);
-                    $_SESSION['csrf'] = bin2hex(random_bytes(32));
-                    header('Location: user_login.php?reset=1');
-                    exit();
-                }
-            } catch (PDOException $ex) {
-                error_log('Password reset verify failed: ' . $ex->getMessage());
-                $forgot_error = 'System error. Please try again later.';
-            }
+            // Same message whether or not the account exists, so we don't
+            // leak which emails are registered.
+            $forgot_message = 'If an account exists for that email, a reset link has been sent.';
+        } catch (PDOException $ex) {
+            $forgot_error = 'System error. Please try again later.';
         }
     }
 }
-
-/* Seconds left before "Resend" works again (drives the countdown). */
-$cooldownLeft = max(0, RESEND_COOLDOWN - (time() - (int)($_SESSION['pw_reset_last_sent'] ?? 0)));
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Reset Password | PSU Internalization</title>
-      <link rel="stylesheet" href="../asset/css/user_forgot_pass.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset Password — PSU Internalization</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ===== DESIGN TOKENS ===== */
+        :root {
+            --blue:        #1a4a8a;
+            --blue-light:  #2a63b8;
+            --blue-dark:   #0f2c57;
+            --gold:        #e8b830;
+            --gold-light:  #f6d676;
+            --bg:          #eef2f8;
+            --white:       #ffffff;
+            --navy:        #14233d;
+            --gray-700:    #3a4a5e;
+            --gray-500:    #6b7a8f;
+            --gray-400:    #94a3b8;
+            --gray-300:    #cbd5e1;
+            --gray-200:    #e2e8f0;
+            --gray-100:    #f4f7fb;
+            --radius-sm:   10px;
+            --radius:      14px;
+            --radius-lg:   24px;
+            --shadow-lg:   0 24px 64px rgba(15,44,87,0.15);
+            --shadow-btn:  0 8px 24px rgba(26,74,138,0.35);
+            --font-body:   'Inter', sans-serif;
+            --font-heading:'Plus Jakarta Sans', sans-serif;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { min-height: 100%; }
+        body {
+            font-family: var(--font-body);
+            background: var(--bg);
+            color: var(--navy);
+            -webkit-font-smoothing: antialiased;
+        }
+        a:focus-visible, button:focus-visible, input:focus-visible {
+            outline: 2px solid var(--blue);
+            outline-offset: 2px;
+        }
+
+        /* ===== PAGE LAYOUT ===== */
+        .page {
+            display: grid;
+            grid-template-columns: minmax(420px, 1fr) 1fr;
+            min-height: 100vh;
+        }
+
+        /* ===== HERO PANEL (LEFT) ===== */
+        .hero {
+            position: relative;
+            overflow: hidden;
+            color: var(--white);
+            padding: 56px 64px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            background: 
+                radial-gradient(circle at 100% 0%, rgba(232,184,48,0.2) 0%, transparent 40%),
+                radial-gradient(circle at 0% 100%, rgba(42,99,184,0.6) 0%, transparent 50%),
+                linear-gradient(135deg, var(--blue-dark) 0%, var(--blue) 100%);
+            z-index: 1;
+        }
+
+        /* Subtle grid pattern */
+        .hero::before {
+            content: '';
+            position: absolute; inset: 0;
+            background-image: 
+                linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+            -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+            z-index: -1;
+        }
+
+        /* Animated glowing orbs */
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            z-index: -1;
+            animation: pulse 8s infinite alternate;
+        }
+        .orb.o1 {
+            width: 400px; height: 400px;
+            background: rgba(232,184,48,0.15);
+            top: -100px; right: -100px;
+        }
+        .orb.o2 {
+            width: 300px; height: 300px;
+            background: rgba(42,99,184,0.3);
+            bottom: -50px; left: -50px;
+            animation-delay: -4s;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1) translate(0, 0); opacity: 0.8; }
+            100% { transform: scale(1.1) translate(20px, 20px); opacity: 1; }
+        }
+
+        .hero-top, .hero-body, .hero-foot { position: relative; z-index: 2; }
+
+        /* Brand Logo */
+        .brand {
+            display: inline-flex; align-items: center; gap: 12px;
+            font-family: var(--font-heading);
+            font-weight: 800; font-size: 1.4rem;
+            color: var(--white); text-decoration: none;
+        }
+        .brand .badge {
+            background: var(--gold); color: var(--blue-dark);
+            font-size: 0.75rem; padding: 6px 12px; border-radius: 8px; letter-spacing: 0.5px;
+            box-shadow: 0 4px 16px rgba(232,184,48,0.4);
+        }
+        .brand span.gold { color: var(--gold-light); }
+
+        /* Hero Text */
+        .hero-body { margin: 48px 0; }
+        .eyebrow {
+            display: inline-flex; align-items: center; gap: 10px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.15);
+            backdrop-filter: blur(10px);
+            padding: 8px 16px; border-radius: 999px;
+            font-size: 0.75rem; font-weight: 600; letter-spacing: 0.5px;
+            margin-bottom: 24px;
+            color: rgba(255,255,255,0.9);
+        }
+        .eyebrow i { 
+            width: 8px; height: 8px; border-radius: 50%; 
+            background: var(--gold); box-shadow: 0 0 12px var(--gold); 
+        }
+        
+        .hero h2 {
+            font-family: var(--font-heading);
+            font-size: clamp(2.2rem, 3.5vw, 3.2rem);
+            line-height: 1.15; font-weight: 800; letter-spacing: -1px;
+            margin-bottom: 20px;
+        }
+        .hero h2 em { 
+            font-style: normal; color: var(--gold); 
+            position: relative; white-space: nowrap; 
+        }
+        .hero p.lead { 
+            color: rgba(255,255,255,0.8); 
+            font-size: 1.05rem; line-height: 1.7; 
+            max-width: 420px; 
+            margin-bottom: 40px;
+        }
+
+        /* Feature Glass Cards */
+        .features { list-style: none; display: grid; gap: 16px; max-width: 440px; }
+        .features li {
+            display: flex; align-items: center; gap: 16px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            backdrop-filter: blur(12px);
+            padding: 16px 20px; border-radius: var(--radius);
+            transition: all 0.3s ease;
+        }
+        .features li:hover { 
+            transform: translateX(8px); 
+            background: rgba(255,255,255,0.1); 
+            border-color: rgba(255,255,255,0.25);
+        }
+        .features .ico {
+            flex: 0 0 44px; height: 44px; border-radius: 12px;
+            display: grid; place-items: center;
+            background: linear-gradient(135deg, var(--gold), var(--gold-light));
+            color: var(--blue-dark);
+            box-shadow: 0 4px 12px rgba(232,184,48,0.3);
+        }
+        .features strong { display: block; font-family: var(--font-heading); font-size: 1rem; margin-bottom: 4px; }
+        .features small { color: rgba(255,255,255,0.6); font-size: 0.85rem; }
+        
+        .hero-foot { font-size: 0.85rem; color: rgba(255,255,255,0.5); }
+
+        /* ===== FORM SIDE (RIGHT) ===== */
+        .form-side {
+            display: flex; align-items: center; justify-content: center;
+            padding: 48px 32px;
+            background: var(--gray-100);
+            position: relative;
+        }
+
+        /* Form Card */
+        .login-card {
+            width: 100%; max-width: 460px;
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            padding: 48px;
+            position: relative; overflow: hidden;
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes slideUp { 
+            from { opacity: 0; transform: translateY(30px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+
+        /* Card Top Accent */
+        .login-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 6px;
+            background: linear-gradient(90deg, var(--blue-dark), var(--blue), var(--gold));
+        }
+
+        .login-header { margin-bottom: 32px; text-align: center; }
+        .login-header h1 {
+            font-family: var(--font-heading);
+            font-size: 2rem; font-weight: 800; letter-spacing: -0.8px;
+            margin-bottom: 8px; color: var(--navy);
+        }
+        .login-header p { color: var(--gray-500); font-size: 0.95rem; }
+
+        /* Alerts */
+        .alert-error {
+            background: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid #ef4444;
+            color: #b91c1c; padding: 16px; border-radius: var(--radius-sm);
+            margin-bottom: 24px; font-size: 0.9rem; font-weight: 500;
+            display: flex; align-items: center; gap: 12px;
+            animation: shake 0.4s ease-in-out;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        .alert-error svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+        .alert-success {
+            background: #ecfdf5; border: 1px solid #a7f3d0; border-left: 4px solid #10b981;
+            color: #047857; padding: 16px; border-radius: var(--radius-sm);
+            margin-bottom: 24px; font-size: 0.9rem; font-weight: 600;
+            display: flex; align-items: center; gap: 12px;
+        }
+        .alert-success svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+        /* Input Fields */
+        .form-group { margin-bottom: 20px; }
+        .form-label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--gray-700); margin-bottom: 8px; }
+        
+        .input-wrap { position: relative; }
+        .input-wrap > svg.lead-ic {
+            position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+            width: 20px; height: 20px; color: var(--gray-400); pointer-events: none; transition: color 0.2s;
+        }
+        
+        .form-input {
+            width: 100%; padding: 16px 16px 16px 48px;
+            border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm);
+            font-family: var(--font-body); font-size: 0.95rem; color: var(--navy);
+            background: var(--white); transition: all 0.2s ease;
+        }
+        .form-input:hover { border-color: var(--gray-300); background: var(--gray-100); }
+        .form-input:focus {
+            outline: none; background: var(--white);
+            border-color: var(--blue); box-shadow: 0 0 0 4px rgba(26,74,138,0.1);
+        }
+        .input-wrap:focus-within > svg.lead-ic { color: var(--blue); }
+        .form-input::placeholder { color: var(--gray-400); }
+
+        /* Submit Button */
+        .btn-submit {
+            width: 100%;
+            background: linear-gradient(135deg, var(--blue) 0%, var(--blue-light) 100%);
+            color: var(--white); border: none; border-radius: var(--radius-sm);
+            font-family: var(--font-heading); font-size: 1.05rem; font-weight: 700;
+            padding: 16px; cursor: pointer; transition: all 0.3s ease;
+            box-shadow: var(--shadow-btn);
+            position: relative; overflow: hidden;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .btn-submit::after {
+            content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s ease;
+        }
+        .btn-submit:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 12px 28px rgba(26,74,138,0.45); 
+        }
+        .btn-submit:hover::after { left: 150%; }
+        .btn-submit:active { transform: translateY(0); }
+
+        /* Footer Links */
+        .login-footer { text-align: center; margin-top: 32px; font-size: 0.9rem; color: var(--gray-500); }
+        .login-footer a { color: var(--blue); text-decoration: none; font-weight: 700; transition: color 0.2s; }
+        .login-footer a:hover { color: var(--blue-dark); text-decoration: underline; }
+
+        .copyright { text-align: center; margin-top: 24px; font-size: 0.8rem; color: var(--gray-400); }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 1024px) {
+            .hero { padding: 40px; }
+            .hero h2 { font-size: 2.2rem; }
+        }
+        @media (max-width: 860px) {
+            .page { grid-template-columns: 1fr; }
+            .hero { display: none; /* Hide hero on tablets/mobile for focus */ }
+            .form-side { padding: 32px 16px; background: var(--bg); }
+            .login-card { padding: 36px 28px; box-shadow: var(--shadow-md); }
+        }
+        @media (max-width: 480px) {
+            .login-card { padding: 28px 20px; border-radius: var(--radius); }
+            .login-header h1 { font-size: 1.7rem; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation: none !important; transition: none !important; }
+        }
+    </style>
 </head>
 <body>
-  <main class="shell">
 
-    <aside class="panel">
-      <div class="brand"><span class="brand-mark">PSU</span> Account Recovery</div>
-      <span class="shape diamond-a"></span>
-      <span class="shape diamond-b"></span>
-      <span class="shape tri"></span>
-      <span class="shape circle"></span>
+<div class="page">
 
-      <h2>Reset your<span>PSU Internalization</span> password</h2>
-      <p>We'll email you a one-time code so you can get back into your account securely.</p>
-      <a href="user_login.php" class="ghost-btn">Sign In</a>
+    <!-- ============ HERO PANEL (LEFT) ============ -->
+    <aside class="hero">
+        <div class="orb o1"></div>
+        <div class="orb o2"></div>
+
+        <div class="hero-top">
+            <a href="browse_program.php" class="brand"><span class="badge">PSU</span> PSU <span class="gold">Internalization</span></a>
+        </div>
+
+        <div class="hero-body">
+            <div class="eyebrow"><i></i> Account Recovery</div>
+            <h2>Get back to your <em>global</em> journey.</h2>
+            <p class="lead">Forgot your password? No worries. Enter your email address and we'll send you a secure link to reset it.</p>
+
+            <ul class="features">
+                <li>
+                    <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+                    <div><strong>Secure recovery</strong><small>Your account safety is our priority</small></div>
+                </li>
+                <li>
+                    <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg></div>
+                    <div><strong>Instant email delivery</strong><small>Receive your reset link immediately</small></div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="hero-foot">&copy; <?= date('Y') ?> Pangasinan State University &middot; Internalization Office</div>
     </aside>
 
-    <section class="form-side">
+    <!-- ============ FORM SIDE (RIGHT) ============ -->
+    <main class="form-side">
+        <div class="login-card">
 
-<?php if ($forgot_step === 'request'): ?>
-      <!-- STEP 1: REQUEST CODE -->
-      <h1>Reset Password</h1>
-      <p class="subtitle">Enter your email and we'll send a 6-digit verification code.</p>
+            <div class="login-header">
+                <h1>Reset Password</h1>
+                <p>Enter your email to recover your account</p>
+            </div>
 
-      <?php if ($forgot_error !== ''): ?>
-        <div class="alert" role="alert"><?= e($forgot_error) ?></div>
-      <?php endif; ?>
+            <?php if ($forgot_error): ?>
+                <div class="alert-error">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    <?= e($forgot_error) ?>
+                </div>
+            <?php endif; ?>
 
-      <form id="forgotForm" method="post" action="forgot_password.php">
-        <input type="hidden" name="csrf" value="<?= e($_SESSION['csrf']) ?>">
-        <input type="hidden" name="forgot_action" value="request">
+            <?php if ($forgot_message): ?>
+                <div class="alert-success">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    <?= e($forgot_message) ?>
+                </div>
+            <?php endif; ?>
 
-        <div class="field">
-          <label class="lbl" for="email">Email Address</label>
-          <div class="wrap">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
-            <input type="email" id="email" name="email" value="<?= e($forgot_email) ?>" placeholder="name@psu.edu.ph" maxlength="190" autocomplete="email" autofocus required>
-          </div>
+            <form method="POST" action="forgot.php">
+                <div class="form-group">
+                    <label class="form-label" for="email">Email Address</label>
+                    <div class="input-wrap">
+                        <svg class="lead-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg>
+                        <input class="form-input" type="email" name="email" id="email"
+                            placeholder="Enter your email address"
+                            value="<?= e($forgot_email) ?>"
+                            required autocomplete="email" autofocus>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-submit">
+                    Send Reset Link
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </button>
+            </form>
+
+            <div class="login-footer">
+                Remember your password? <a href="user_login.php">Sign In</a>
+            </div>
+
+            <div class="copyright">
+                &copy; <?= date('Y') ?> Pangasinan State University
+            </div>
+
         </div>
+    </main>
+</div>
 
-        <button type="submit" class="submit-btn">Send Code</button>
-      </form>
-
-      <p class="back-line"><a href="user_login.php">Back to Sign In</a></p>
-
-<?php else: ?>
-      <!-- STEP 2: VERIFY CODE + NEW PASSWORD -->
-      <h1>Enter Code</h1>
-      <p class="subtitle">We sent a 6-digit code to <strong><?= e(mask_email($forgot_email)) ?></strong>.<br>Enter it below with your new password.</p>
-
-      <?php if ($forgot_message !== ''): ?>
-        <div class="alert success" role="status"><?= e($forgot_message) ?></div>
-      <?php endif; ?>
-      <?php if ($forgot_error !== ''): ?>
-        <div class="alert" role="alert"><?= e($forgot_error) ?></div>
-      <?php endif; ?>
-
-      <form id="verifyForm" method="post" action="forgot_password.php">
-        <input type="hidden" name="csrf" value="<?= e($_SESSION['csrf']) ?>">
-        <input type="hidden" name="forgot_action" value="verify">
-
-        <div class="field">
-          <label class="lbl" for="otp0">Verification Code</label>
-          <div class="otp-row" id="otpRow">
-            <?php for ($i = 0; $i < 6; $i++): ?>
-              <input type="text" id="otp<?= $i ?>" name="otp[]" maxlength="1" inputmode="numeric" pattern="[0-9]" aria-label="Digit <?= $i + 1 ?>"
-                     <?= $i === 0 ? 'autocomplete="one-time-code" autofocus' : '' ?> required>
-            <?php endfor; ?>
-          </div>
-          <p class="otp-hint">The code expires in <b><?= (int)OTP_TTL_MINUTES ?> minutes</b>.</p>
-        </div>
-
-        <div class="field">
-          <label class="lbl" for="resetPassword">New Password</label>
-          <div class="wrap has-toggle">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
-            <input type="password" id="resetPassword" name="password" placeholder="Enter new password" minlength="8" maxlength="72" autocomplete="new-password" required>
-            <button type="button" class="eye-btn" data-eye aria-label="Show password">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-          </div>
-          <div class="strength" id="strength" data-score="0" aria-live="polite">
-            <div class="bars"><span></span><span></span><span></span><span></span></div>
-            <div class="lab">Password strength: <b id="strengthLabel">—</b> · 8+ characters with a letter and a number</div>
-          </div>
-        </div>
-
-        <div class="field">
-          <label class="lbl" for="confirmPassword">Confirm New Password</label>
-          <div class="wrap has-toggle">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
-            <input type="password" id="confirmPassword" name="confirm_password" placeholder="Confirm new password" maxlength="72" autocomplete="new-password" required>
-            <button type="button" class="eye-btn" data-eye aria-label="Show password">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-          </div>
-        </div>
-
-        <button type="submit" class="submit-btn" id="submitBtn">Reset Password</button>
-      </form>
-
-      <div class="links">
-        <span>Didn't get a code?</span>
-        <form method="post" action="forgot_password.php">
-          <input type="hidden" name="csrf" value="<?= e($_SESSION['csrf']) ?>">
-          <input type="hidden" name="forgot_action" value="resend">
-          <button type="submit" class="linklike" id="resendBtn" data-wait="<?= (int)$cooldownLeft ?>" <?= $cooldownLeft > 0 ? 'disabled' : '' ?>>Resend</button>
-        </form>
-        <span>·</span>
-        <form method="post" action="forgot_password.php">
-          <input type="hidden" name="csrf" value="<?= e($_SESSION['csrf']) ?>">
-          <input type="hidden" name="forgot_action" value="change_email">
-          <button type="submit" class="linklike" formnovalidate>Use a different email</button>
-        </form>
-      </div>
-
-      <p class="back-line"><a href="user_login.php">Back to Sign In</a></p>
-<?php endif; ?>
-
-    </section>
-  </main>
-
-  
 </body>
 </html>
-    <script src="../asset/js/user_forgot_pass.js"></script>

@@ -35,7 +35,6 @@ $offset = ($page - 1) * $limit;
 
 /* =========================
    ALLOWED SORT COLUMNS
-   (whitelist prevents SQL injection via ORDER BY)
 ========================= */
 $allowedSort = [
     'id'         => 'a.id',
@@ -77,9 +76,9 @@ if ($department !== '') {
 }
 
 if ($view === 'new') {
-    $where .= " AND p.status = 'pending'";
+    $where .= " AND a.status = 'submitted'";
 } elseif ($view === 'review') {
-    $where .= " AND p.status = 'under evaluation'";
+    $where .= " AND a.status = 'under_review'";
 }
 
 /* =========================
@@ -108,25 +107,16 @@ SELECT
     a.documents_status,
     a.created_at,
     a.reviewed_at,
-
     p.program_name AS program,
     p.program_type AS department,
     p.country_id   AS country,
-    p.status,
-
+    a.status       AS status,
     CONCAT(u.first_name,' ',u.last_name) AS applicant_name,
     u.email AS applicant_email
-
 FROM applications a
-
-LEFT JOIN users u
-    ON a.applicant_id = u.id
-
-LEFT JOIN programs p
-    ON a.program_id = p.id
-
+LEFT JOIN users u ON a.applicant_id = u.id
+LEFT JOIN programs p ON a.program_id = p.id
 $where
-
 ORDER BY $sortColumn $order
 LIMIT $limit OFFSET $offset
 ";
@@ -134,77 +124,357 @@ LIMIT $limit OFFSET $offset
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
 $totalPages = max(1, ceil($totalApplications / $limit));
 
-/* Helper: build a sort-aware column header */
 function sortHeader(string $label, string $col, string $sort, string $order): string {
     $isActive = $sort === $col;
     $nextOrder = ($isActive && $order === 'DESC') ? 'ASC' : 'DESC';
-    $icon = $isActive
-        ? ($order === 'DESC' ? 'fa-sort-down' : 'fa-sort-up')
-        : 'fa-sort';
+    $icon = $isActive ? ($order === 'DESC' ? 'fa-sort-down' : 'fa-sort-up') : 'fa-sort';
     $cls = $isActive ? 'sort-icon sort-icon--active' : 'sort-icon';
     $url = http_build_query(array_merge($_GET, ['sort' => $col, 'order' => $nextOrder]));
-    return '<span class="th-inner">'
-        . '<a href="?' . h($url) . '" class="th-link">' . h($label) . '</a>'
-        . '<i class="fa ' . $cls . '"></i>'
-        . '</span>';
+    return '<span class="th-inner"><a href="?' . h($url) . '" class="th-link">' . h($label) . '</a><i class="fa ' . $cls . '"></i></span>';
 }
 ?>
 
-<link rel="stylesheet" href="../asset/css/applications.css">
+<!-- GUARANTEED FALLBACK CSS -->
+<style>
+    .content { padding: 32px 36px; font-family: 'Inter', sans-serif; color: #0f172a; }
+    .page-header { margin-bottom: 28px; }
+    .page-header h2 { font-size: 1.75rem; font-weight: 700; margin: 0 0 6px; }
+    .page-header p { font-size: 0.9rem; color: #475569; margin: 0; padding-left: 12px; border-left: 3px solid #2563eb; }
+    
+    .toolbar { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+    .search-wrap { flex: 1; min-width: 240px; display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 9999px; padding: 0 18px; height: 44px; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+    .search-wrap input { flex: 1; border: none; outline: none; background: transparent; font-size: 0.9rem; }
+    
+    .tabs { display: flex; gap: 4px; background: #fff; border: 1px solid #e2e8f0; border-radius: 9999px; padding: 4px; }
+    .tabs a { text-decoration: none; font-size: 0.875rem; font-weight: 500; color: #475569; padding: 6px 20px; border-radius: 9999px; }
+    .tabs a.active { background: #0f2044; color: #fff; }
+
+    .filter-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+    .filter-bar select { padding: 9px 36px 9px 14px; border-radius: 8px; border: 1px solid #e2e8f0; background: #fff; height: 40px; }
+    .filter-bar button { background: #0f2044; color: #fff; border: none; border-radius: 8px; padding: 9px 20px; height: 40px; cursor: pointer; }
+
+    .table-section { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,.1); }
+    .table-card { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    
+    /* THE FIX: Light header */
+    .table-card thead { background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+    .table-card thead th { padding: 16px 20px; text-align: left; font-size: 0.75rem; text-transform: uppercase; color: #94a3b8; }
+    
+    .table-card tbody tr { border-bottom: 1px solid #e2e8f0; }
+    .table-card tbody tr:hover { background: #f8fafc; }
+    .table-card tbody td { padding: 16px 20px; color: #475569; vertical-align: middle; }
+
+
+/* Applicant Information - Horizontal Layout */
+.applicant-cell {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 12px !important;
+    text-align: left;
+    width: 100%;
+}
+
+.applicant-avatar {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: #e0f2fe;
+    color: #0284c7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+}
+
+.applicant-info {
+    text-align: left;
+}
+
+.applicant-info strong {
+    display: block;
+    color: #0f172a;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.applicant-info small {
+    display: block;
+    color: #94a3b8;
+    font-size: 0.8rem;
+}
+
+    /* =========================
+       MODAL CSS
+    ========================= */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 32, 68, 0.45);
+        backdrop-filter: blur(3px);
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+    .modal-overlay.open {
+        display: flex;
+    }
+
+    .modal-box {
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        width: 100%;
+        max-width: 540px;
+        display: flex;
+        flex-direction: column;
+        animation: modalSlideUp 0.22s ease;
+    }
+    .modal-box--sm {
+        max-width: 440px;
+    }
+
+    @keyframes modalSlideUp {
+        from { opacity: 0; transform: translateY(16px) scale(0.98); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 24px;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .modal-header h3 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+    }
+    .modal-close {
+        width: 32px;
+        height: 32px;
+        border: none;
+        background: #f8fafc;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 1.2rem;
+        color: #475569;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: 0.2s;
+    }
+    .modal-close:hover {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+
+    .modal-body {
+        padding: 24px;
+        overflow-y: auto;
+    }
+
+    .modal-section {
+        margin-bottom: 24px;
+    }
+    .modal-section:last-child {
+        margin-bottom: 0;
+    }
+    .modal-section h4 {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: #94a3b8;
+        margin: 0 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .modal-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+    }
+
+    .modal-field label {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #94a3b8;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+    .modal-field span {
+        font-size: 0.9rem;
+        color: #0f172a;
+        font-weight: 500;
+        word-break: break-word;
+    }
+
+    .modal-footer {
+        padding: 16px 24px;
+        border-top: 1px solid #e2e8f0;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        background: #fafafa;
+        border-radius: 0 0 16px 16px;
+    }
+
+    /* Confirm Modal Specifics */
+    .confirm-icon {
+        text-align: center;
+        margin-bottom: 14px;
+    }
+    .confirm-message {
+        text-align: center;
+        font-size: 0.95rem;
+        color: #475569;
+        margin: 0;
+        line-height: 1.6;
+    }
+
+    /* Modal Buttons */
+    .btn-secondary {
+        padding: 9px 20px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #475569;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+    .btn-secondary:hover {
+        background: #f8fafc;
+        border-color: #cbd5e1;
+    }
+
+    .btn-confirm {
+        padding: 9px 20px;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: white;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+    .btn-confirm:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    .btn-confirm--approve { background: #16a34a; }
+    .btn-confirm--approve:hover { background: #15803d; }
+    .btn-confirm--reject { background: #dc2626; }
+    .btn-confirm--reject:hover { background: #b91c1c; }
+    .btn-confirm--delete { background: #dc2626; }
+    .btn-confirm--delete:hover { background: #b91c1c; }
+
+    /* Toast */
+    .toast {
+        position: fixed;
+        bottom: 28px;
+        right: 28px;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 20px;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: white;
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,.1);
+        transform: translateY(12px);
+        opacity: 0;
+        transition: opacity 0.25s ease, transform 0.25s ease;
+        pointer-events: none;
+    }
+    .toast--show {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    .toast--success { background: #0f2044; }
+    .toast--error { background: #dc2626; }
+
+/* Application Status Badges */
+.status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 9999px; font-size: 0.76rem; font-weight: 600; }
+.status-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* Green */
+.status-approved { background: #dcfce7; color: #15803d; }
+
+/* Red */
+.status-rejected { background: #fee2e2; color: #b91c1c; }
+
+/* Blue */
+.status-submitted { background: #e0f2fe; color: #0369a1; }
+.status-under_review { background: #e0f2fe; color: #0369a1; }
+    /* Actions */
+    .action-btns { display: flex; gap: 6px; }
+    .action-btns button { width: 34px; height: 34px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: #94a3b8; cursor: pointer; transition: 0.2s; }
+    .btn-view:hover { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+    .btn-approve:hover { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+    .btn-reject:hover { background: #fff7ed; color: #ea580c; border-color: #fed7aa; }
+    .btn-delete:hover { background: #fff1f2; color: #dc2626; border-color: #fecdd3; }
+
+    /* Pagination */
+    .pagination { display: flex; justify-content: space-between; padding: 16px 20px; background: #fff; border-top: 1px solid #e2e8f0; }
+    .pages { display: flex; gap: 6px; }
+    .pages a, .pages button { min-width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 6px; text-decoration: none; color: #475569; border: 1px solid transparent; background: transparent; }
+    .pages a.active { background: #0f2044; color: white; }
+
+    
+</style>
 
 <div class="content">
-
-    <!-- HEADER -->
     <div class="page-header">
         <h2>Applications Management</h2>
         <p>Handles all submitted mobility applications.</p>
     </div>
 
-    <!-- SEARCH + TABS -->
     <div class="toolbar">
         <div class="search-wrap">
             <i class="fa fa-search"></i>
-            <input type="text"
-                   id="searchInput"
-                   name="search"
-                   form="filterForm"
-                   placeholder="Search applications..."
-                   value="<?= h($search) ?>">
+            <input type="text" id="searchInput" name="search" form="filterForm" placeholder="Search applications..." value="<?= h($search) ?>">
         </div>
-
         <div class="tabs">
-            <a href="?view=all"    class="<?= $view === 'all'    ? 'active' : '' ?>">All</a>
-            <a href="?view=new"    class="<?= $view === 'new'    ? 'active' : '' ?>">New</a>
+            <a href="?view=all" class="<?= $view === 'all' ? 'active' : '' ?>">All</a>
+            <a href="?view=new" class="<?= $view === 'new' ? 'active' : '' ?>">New</a>
             <a href="?view=review" class="<?= $view === 'review' ? 'active' : '' ?>">Review</a>
         </div>
     </div>
 
-    <!-- FILTERS -->
     <form method="GET" class="filter-bar" id="filterForm">
         <input type="hidden" name="view" value="<?= h($view) ?>">
         <input type="hidden" name="sort" value="<?= h($sort) ?>">
         <input type="hidden" name="order" value="<?= h($order) ?>">
-
         <select name="program">
             <option value="">All Programs</option>
             <option value="BSIT" <?= $program === 'BSIT' ? 'selected' : '' ?>>BSIT</option>
             <option value="BSCS" <?= $program === 'BSCS' ? 'selected' : '' ?>>BSCS</option>
         </select>
-
         <select name="department">
             <option value="">All Departments</option>
-            <option value="IT"          <?= $department === 'IT'          ? 'selected' : '' ?>>IT</option>
+            <option value="IT" <?= $department === 'IT' ? 'selected' : '' ?>>IT</option>
             <option value="Engineering" <?= $department === 'Engineering' ? 'selected' : '' ?>>Engineering</option>
-            <option value="Business"    <?= $department === 'Business'    ? 'selected' : '' ?>>Business</option>
+            <option value="Business" <?= $department === 'Business' ? 'selected' : '' ?>>Business</option>
         </select>
-
         <button type="submit"><i class="fa fa-filter"></i> Filter</button>
     </form>
 
-    <!-- TABLE -->
     <div class="table-section">
         <table class="table-card">
             <thead>
@@ -242,48 +512,41 @@ function sortHeader(string $label, string $col, string $sort, string $order): st
                     </td>
                     <td><?= h($a['program']) ?></td>
                     <td><?= h($a['department']) ?></td>
-                    <td>
-                        <span class="status-badge status-<?= h($statusKey) ?>">
-                            <?= h(ucfirst($a['status'] ?? '')) ?>
-                        </span>
-                    </td>
+<td>
+    <?php 
+        $statusRaw = $a['status'] ?? 'unknown';
+        // Replaces underscore with space (e.g. under_review -> under review)
+        $statusLabel = ucwords(str_replace('_', ' ', $statusRaw)); 
+        $statusKey = strtolower($statusRaw);
+    ?>
+    <span class="status-badge status-<?= h($statusKey) ?>">
+        <?= h($statusLabel) ?>
+    </span>
+</td>
                     <td><?= h($a['country']) ?></td>
                     <td><?= date('M d, Y', strtotime($a['created_at'])) ?></td>
-                    <td class="action-btns">
-                        <button class="btn-view"
-                                onclick='openModal(<?= htmlspecialchars(json_encode($a), ENT_QUOTES) ?>)'
-                                title="View">
-                            <i class="fa fa-eye"></i>
-                        </button>
-                        <button class="btn-approve"
-                                onclick="confirmAction('approve', <?= h($a['id']) ?>)"
-                                title="Approve">
-                            <i class="fa fa-check"></i>
-                        </button>
-                        <button class="btn-reject"
-                                onclick="confirmAction('reject', <?= h($a['id']) ?>)"
-                                title="Reject">
-                            <i class="fa fa-close"></i>
-                        </button>
-                        <button class="btn-delete"
-                                onclick="confirmAction('delete', <?= h($a['id']) ?>)"
-                                title="Delete">
-                            <i class="fa fa-trash"></i>
-                        </button>
+                    <td>
+                        <div class="action-btns">
+                            <button class="btn-view" onclick='openModal(<?= htmlspecialchars(json_encode($a), ENT_QUOTES) ?>)' title="View">
+                                <i class="fa fa-eye"></i>
+                            </button>
+                            <button class="btn-approve" onclick="confirmAction('approve', <?= h($a['id']) ?>)" title="Approve">
+                                <i class="fa fa-check"></i>
+                            </button>
+                            <button class="btn-reject" onclick="confirmAction('reject', <?= h($a['id']) ?>)" title="Reject">
+                                <i class="fa fa-close"></i>
+                            </button>
+                            <button class="btn-delete" onclick="confirmAction('delete', <?= h($a['id']) ?>)" title="Delete">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </div>
                     </td>
                 </tr>
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="8">
-                        <div class="empty-state">
-                            <div class="empty-state-icon">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                    <polyline points="14 2 14 8 20 8"/>
-                                    <line x1="9" y1="15" x2="15" y2="15"/>
-                                </svg>
-                            </div>
+                    <td colspan="7">
+                        <div class="empty-state" style="text-align:center; padding: 40px;">
                             <h3>No applications found</h3>
                             <p>Try adjusting your search or filters.</p>
                         </div>
@@ -294,156 +557,90 @@ function sortHeader(string $label, string $col, string $sort, string $order): st
         </table>
     </div>
 
-    <!-- PAGINATION -->
     <div class="pagination">
-        <span>
-            Showing <?= count($applications) ?> of <?= $totalApplications ?> applications
-        </span>
+        <span>Showing <?= count($applications) ?> of <?= $totalApplications ?> applications</span>
         <div class="pages">
             <?php
                 $baseQ = array_merge($_GET, []);
                 unset($baseQ['p']);
             ?>
             <?php if ($page > 1): ?>
-                <a class="page-arrow" href="?<?= h(http_build_query(array_merge($baseQ, ['p' => $page - 1]))) ?>">
-                    <i class="fa fa-angle-left"></i>
-                </a>
+                <a class="page-arrow" href="?<?= h(http_build_query(array_merge($baseQ, ['p' => $page - 1]))) ?>"><i class="fa fa-angle-left"></i></a>
             <?php else: ?>
                 <button class="page-arrow" disabled><i class="fa fa-angle-left"></i></button>
             <?php endif; ?>
 
             <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                <a href="?<?= h(http_build_query(array_merge($baseQ, ['p' => $i]))) ?>"
-                   class="<?= $i === $page ? 'active' : '' ?>">
-                    <?= $i ?>
-                </a>
+                <a href="?<?= h(http_build_query(array_merge($baseQ, ['p' => $i]))) ?>" class="<?= $i === $page ? 'active' : '' ?>"><?= $i ?></a>
             <?php endfor; ?>
 
             <?php if ($page < $totalPages): ?>
-                <a class="page-arrow" href="?<?= h(http_build_query(array_merge($baseQ, ['p' => $page + 1]))) ?>">
-                    <i class="fa fa-angle-right"></i>
-                </a>
+                <a class="page-arrow" href="?<?= h(http_build_query(array_merge($baseQ, ['p' => $page + 1]))) ?>"><i class="fa fa-angle-right"></i></a>
             <?php else: ?>
                 <button class="page-arrow" disabled><i class="fa fa-angle-right"></i></button>
             <?php endif; ?>
         </div>
     </div>
+</div>
 
-</div><!-- end .content -->
-
-<!-- ================================
-     VIEW MODAL
-================================ -->
+<!-- MODALS (Keep your existing modal HTML here, no changes needed) -->
 <div id="appModal" class="modal-overlay" onclick="closeModalOutside(event)">
     <div class="modal-box">
-
         <div class="modal-header">
             <h3>Application Details</h3>
             <button class="modal-close" onclick="closeModal()">&times;</button>
         </div>
-
         <div class="modal-body">
-
             <div class="modal-section">
                 <h4>Applicant</h4>
                 <div class="modal-grid">
-                    <div class="modal-field">
-                        <label>Name</label>
-                        <span id="m-name"></span>
-                    </div>
-                    <div class="modal-field">
-                        <label>Email</label>
-                        <span id="m-email"></span>
-                    </div>
+                    <div class="modal-field"><label>Name</label><span id="m-name"></span></div>
+                    <div class="modal-field"><label>Email</label><span id="m-email"></span></div>
                 </div>
             </div>
-
             <div class="modal-section">
                 <h4>Application</h4>
                 <div class="modal-grid">
-                    <div class="modal-field">
-                        <label>ID</label>
-                        <span id="m-id"></span>
-                    </div>
-                    <div class="modal-field">
-                        <label>Program</label>
-                        <span id="m-program"></span>
-                    </div>
-                    <div class="modal-field">
-                        <label>Department</label>
-                        <span id="m-department"></span>
-                    </div>
-                    <div class="modal-field">
-                        <label>Mobility Type</label>
-                        <span id="m-mobility"></span>
-                    </div>
-                    <div class="modal-field">
-                        <label>Institution</label>
-                        <span id="m-institution"></span>
-                    </div>
-                    <div class="modal-field">
-                        <label>Country</label>
-                        <span id="m-country"></span>
-                    </div>
+                    <div class="modal-field"><label>ID</label><span id="m-id"></span></div>
+                    <div class="modal-field"><label>Program</label><span id="m-program"></span></div>
+                    <div class="modal-field"><label>Department</label><span id="m-department"></span></div>
+                    <div class="modal-field"><label>Mobility Type</label><span id="m-mobility"></span></div>
+                    <div class="modal-field"><label>Institution</label><span id="m-institution"></span></div>
+                    <div class="modal-field"><label>Country</label><span id="m-country"></span></div>
                 </div>
             </div>
-
             <div class="modal-section">
                 <h4>Status</h4>
                 <div class="modal-grid">
-                    <div class="modal-field">
-                        <label>Application Status</label>
-                        <span id="m-status"></span>
-                    </div>
-                    <div class="modal-field">
-                        <label>Documents Status</label>
-                        <span id="m-docs-status"></span>
-                    </div>
-                    <div class="modal-field">
-                        <label>Submitted</label>
-                        <span id="m-created"></span>
-                    </div>
-                    <div class="modal-field">
-                        <label>Reviewed</label>
-                        <span id="m-reviewed"></span>
-                    </div>
+                    <div class="modal-field"><label>Application Status</label><span id="m-status"></span></div>
+                    <div class="modal-field"><label>Documents Status</label><span id="m-docs-status"></span></div>
+                    <div class="modal-field"><label>Submitted</label><span id="m-created"></span></div>
+                    <div class="modal-field"><label>Reviewed</label><span id="m-reviewed"></span></div>
                 </div>
             </div>
-
         </div>
-
         <div class="modal-footer">
             <button class="btn-secondary" onclick="closeModal()">Close</button>
         </div>
-
     </div>
 </div>
-<!-- END #appModal -->
 
-<!-- ================================
-     CONFIRM ACTION MODAL
-================================ -->
 <div id="confirmModal" class="modal-overlay" onclick="closeConfirmOutside(event)">
     <div class="modal-box modal-box--sm">
-
         <div class="modal-header">
             <h3 id="confirm-title">Confirm Action</h3>
             <button class="modal-close" onclick="closeConfirm()">&times;</button>
         </div>
-
         <div class="modal-body">
             <div class="confirm-icon" id="confirm-icon"></div>
             <p id="confirm-message" class="confirm-message"></p>
         </div>
-
         <div class="modal-footer">
             <button class="btn-secondary" onclick="closeConfirm()">Cancel</button>
             <button id="confirm-btn" class="btn-confirm" onclick="executeAction()">Confirm</button>
         </div>
-
     </div>
 </div>
-<!-- END #confirmModal -->
 
 <script>
 /* =====================================

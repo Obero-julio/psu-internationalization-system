@@ -1,15 +1,59 @@
-document.addEventListener('DOMContentLoaded', function () {
-    const sidebar = document.querySelector('.main-sidebar');
-    const toggleBtn = document.getElementById('toggleSidebar');
+/* asset/js/dashboard.js — PSU Internalization admin dashboard */
 
-    if (!sidebar || !toggleBtn) return;
+(function () {
+    'use strict';
 
-    if (localStorage.getItem('sidebarCollapsed') === 'true') {
-        sidebar.classList.add('collapsed');
+    // ----- Sidebar toggle (mobile) -----
+    const toggle = document.getElementById('sidebarToggle');
+
+    if (toggle) {
+        toggle.addEventListener('click', function () {
+            document.body.classList.toggle('sidebar-open');
+        });
     }
 
-    toggleBtn.addEventListener('click', function () {
-        sidebar.classList.toggle('collapsed');
-        localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+    // Close sidebar when clicking the scrim (the ::after on body)
+    document.addEventListener('click', function (e) {
+        if (
+            document.body.classList.contains('sidebar-open') &&
+            !e.target.closest('.sidebar') &&
+            !e.target.closest('#sidebarToggle')
+        ) {
+            document.body.classList.remove('sidebar-open');
+        }
     });
-});
+
+    // Close on Escape
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            document.body.classList.remove('sidebar-open');
+        }
+    });
+
+    // ----- Auto-dismiss alerts after 5s -----
+    document.querySelectorAll('.alert[data-auto-dismiss]').forEach(function (el) {
+        setTimeout(function () {
+            el.style.transition = 'opacity 0.3s ease';
+            el.style.opacity = '0';
+            setTimeout(function () { el.remove(); }, 300);
+        }, 5000);
+    });
+
+    // ----- Modal helpers (exposed globally so inline handlers work) -----
+    window.openModal = function (id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('show');
+    };
+
+    window.closeModal = function (id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('show');
+    };
+
+    // Click on overlay background closes the modal
+    document.querySelectorAll('.modal-overlay').forEach(function (overlay) {
+        overlay.addEventListener('click', function (e) {
+            if (e.target === overlay) overlay.classList.remove('show');
+        });
+    });
+})();

@@ -1,22 +1,4 @@
-/* ============================================================
-   PSU INTERNALIZATION — DASHBOARD
-   Shares the login page's design system:
-   navy sidebar, ink/blue accents, Oswald + Fraunces type
 
-   Color pass: pulled directly from the login page instead of
-   inventing a new palette. The login screen already has a
-   color *language*, not just tokens — navy deepens to
-   navy-deep in the corners, blue-light carries a soft glow
-   wherever something is "live" (the pulsing route node, the
-   dashed flight path, the focus ring), and blue itself is
-   reserved for actionable/interactive moments. This pass
-   brings that same language into the dashboard so the two
-   screens feel like one product, not two separate kits.
-
-   RESPONSIVE NOTE: the sidebar toggle needs a tiny bit of JS
-   to flip classes (see the snippet + markup at the bottom of
-   this file's comments). Everything else here is pure CSS.
-   ============================================================ */
 
 *, *::before, *::after {
     margin: 0;
@@ -50,10 +32,16 @@
     --info: var(--blue);
     --info-bg: #e9f2ff;
 
-    /* the login page's "live" glow — used on the pulsing route
-       node and the flight path. Reused here for anything that
-       means active / current / in-progress, so it carries the
-       same meaning across both screens */
+    /* two more members of the same semantic-pair pattern, used
+       for metric families that aren't strictly
+       success/warning/danger/info (programs, people) */
+    --purple: #6b46c1;
+    --purple-bg: #f1ecfb;
+    --teal: #0f8b8d;
+    --teal-bg: #e6f7f7;
+
+    /* the login page's "live" glow — reused for anything that
+       means active / current / in-progress */
     --glow-blue: 0 0 14px rgba(102, 149, 211, 0.5);
     --glow-blue-soft: 0 0 0 3px rgba(0, 95, 213, 0.1);
 
@@ -63,11 +51,10 @@
     --radius-sm: 6px;
     --shadow-sm: 0 1px 2px rgba(11, 26, 53, 0.06);
     --shadow-md: 0 10px 30px rgba(11, 26, 53, 0.08);
+    --font-sans: 'Oswald', sans-serif;
 }
 
-html, body {
-    height: 100%;
-}
+html, body { height: 100%; }
 
 body {
     font-family: 'Oswald', sans-serif;
@@ -77,25 +64,10 @@ body {
     line-height: 1.5;
 }
 
-a {
-    color: inherit;
-    text-decoration: none;
-}
+a { color: inherit; text-decoration: none; }
+ul { list-style: none; }
+button { font-family: 'Oswald', sans-serif; }
 
-ul {
-    list-style: none;
-}
-
-button {
-    font-family: 'Oswald', sans-serif;
-}
-
-/* Base image reset — without this, any <img> that isn't
-   explicitly sized (or that sits outside its expected wrapper,
-   e.g. a raw logo <img> in the sidebar) renders at its native
-   pixel dimensions and blows out the whole fixed layout. This
-   was missing, which is what let the PSU seal render at full
-   size and slide out from under the fixed topbar. */
 img {
     max-width: 100%;
     height: auto;
@@ -104,12 +76,6 @@ img {
 
 /* ============================================================
    SIDEBAR
-   Matches the actual markup from sidebar.php:
-   .main-sidebar > .sidebar-header (.brand > .brand-logo, .brand-text)
-                 > ul.sidebar-menu > li > a (Home)
-                                   > li.sidebar-dropdown > .dropdown-toggle, .dropdown-menu > a
-                 > .sidebar-footer > .logout-btn
-   Icons are Font Awesome <i> tags, not Material Symbols.
    ============================================================ */
 .main-sidebar {
     position: fixed;
@@ -117,10 +83,6 @@ img {
     left: 0;
     width: var(--sidebar-w);
     height: 100vh;
-    /* login's left panel is flat navy but sits on a deep
-       vignette from the world-map mask; a subtle navy →
-       navy-deep drop toward the bottom gives the same sense
-       of depth without needing the map artwork */
     background: linear-gradient(180deg, var(--navy) 0%, var(--navy) 55%, var(--navy-deep) 100%);
     display: flex;
     flex-direction: column;
@@ -131,18 +93,14 @@ img {
     transition: transform 0.25s ease;
 }
 
-.main-sidebar::-webkit-scrollbar {
-    width: 5px;
-}
-
+.main-sidebar::-webkit-scrollbar { width: 5px; }
 .main-sidebar::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.12);
     border-radius: 4px;
 }
 
-/* brand block, echoes the login-left header */
 .sidebar-header {
-    padding: 24px 22px;
+    padding: 22px 22px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     display: flex;
     align-items: center;
@@ -158,47 +116,57 @@ img {
 }
 
 .brand-logo {
-    width: 40px;
-    height: 40px;
+    width: 42px;
+    height: 42px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
     background: rgba(255, 255, 255, 0.08);
-    /* matches .left-logo on the login page exactly:
-       blue-light ring + soft white outline offset */
     border: 1px solid rgba(102, 149, 211, 0.4);
     outline: 1px solid rgba(255, 255, 255, 0.12);
     outline-offset: 3px;
 }
 
-.brand-text {
-    min-width: 0;
+/* icon-only fallback when there's no seal image on hand —
+   same ring treatment as .brand-logo */
+.brand-mark {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(102, 149, 211, 0.4);
+    outline: 1px solid rgba(255, 255, 255, 0.12);
+    outline-offset: 3px;
+    color: var(--blue-light);
+    font-size: 18px;
 }
+
+.brand-text { min-width: 0; }
 
 .brand-text h4 {
     font-family: 'Oswald', sans-serif;
-    font-optical-sizing: auto;
-    font-size: 16.5px;
+    font-size: 16px;
     font-weight: 600;
     color: #fff;
-    line-height: 1.2;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 1.25;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
 }
 
 .brand-text small {
     display: block;
-    font-family: 'Oswald', sans-serif;
     font-size: 9.5px;
-    font-weight: 500;
+    font-weight: 600;
     letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.45);
-    margin-top: 2px;
+    color: var(--blue-light);
+    margin-top: 3px;
 }
 
-/* close button, mobile-only (mirrors the hamburger's look) */
 .sidebar-close {
     display: none;
     align-items: center;
@@ -214,23 +182,42 @@ img {
     transition: background 0.15s ease, color 0.15s ease;
 }
 
-.sidebar-close:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
+.sidebar-close:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+
+/* collapse toggle in the sidebar header (desktop) */
+.sidebar-collapse {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.55);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
 }
 
-/* nav list */
-.sidebar-menu {
-    flex: 1;
-    padding: 18px 14px 24px;
+.sidebar-collapse:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+
+.sidebar-menu { flex: 1; padding: 16px 14px 24px; }
+.sidebar-menu > li { margin-bottom: 2px; }
+
+/* plain, non-interactive section header ("MANAGEMENT",
+   "ADMINISTRATION") that groups dropdowns together */
+.sidebar-group-label {
+    padding: 18px 12px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.32);
 }
 
-.sidebar-menu > li {
-    margin-bottom: 2px;
-}
+.sidebar-group-label:first-of-type { padding-top: 10px; }
 
-/* both the top-level Home link and every dropdown sub-link
-   share the same nav-row look */
 .sidebar-menu > li > a,
 .dropdown-menu a {
     display: flex;
@@ -255,23 +242,14 @@ img {
 }
 
 .sidebar-menu > li > a:hover,
-.dropdown-menu a:hover {
-    background: rgba(255, 255, 255, 0.06);
-    color: #fff;
-}
+.dropdown-menu a:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
 
 .sidebar-menu > li > a:hover i,
-.dropdown-menu a:hover i {
-    color: var(--blue-light);
-}
+.dropdown-menu a:hover i { color: var(--blue-light); }
 
-.sidebar-menu > li > a.active,
-.dropdown-menu a.active {
-    background: rgba(0, 95, 213, 0.22);
-    color: #fff;
-}
+/* sub-link active state — soft tint + glowing rail */
+.dropdown-menu a.active { background: rgba(0, 95, 213, 0.22); color: #fff; }
 
-.sidebar-menu > li > a.active::before,
 .dropdown-menu a.active::before {
     content: '';
     position: absolute;
@@ -282,56 +260,63 @@ img {
     height: 20px;
     border-radius: 0 3px 3px 0;
     background: var(--blue-light);
-    /* the "you are here" rail now glows the same way the
-       login page's active route dot does — same color,
-       same meaning, same visual weight */
     box-shadow: var(--glow-blue);
 }
 
-.sidebar-menu > li > a.active i,
 .dropdown-menu a.active i {
     color: var(--blue-light);
     filter: drop-shadow(0 0 4px rgba(102, 149, 211, 0.6));
 }
 
-/* dropdown group header row (e.g. "Program Management") */
+/* top-level Home/Dashboard active state: a fully filled pill,
+   the single "you are on the overview" indicator */
+.sidebar-menu > li > a.top-link.active {
+    background: var(--blue);
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(0, 95, 213, 0.35);
+}
+
+.sidebar-menu > li > a.top-link.active i { color: #fff; }
+
 .dropdown-toggle {
     display: flex;
     align-items: center;
+    gap: 12px;
     justify-content: space-between;
     padding: 10px 12px;
     border-radius: var(--radius-sm);
-    font-family: 'Oswald', sans-serif;
-    font-size: 10.5px;
+    font-size: 13px;
     font-weight: 500;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.68);
     cursor: pointer;
     transition: color 0.15s ease, background 0.15s ease;
 }
 
-.dropdown-toggle:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: #fff;
+.dropdown-toggle .toggle-label { display: flex; align-items: center; gap: 12px; }
+
+.dropdown-toggle .toggle-label i {
+    font-size: 15px;
+    width: 19px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.45);
+    transition: color 0.15s ease;
 }
 
-.dropdown-toggle i {
-    font-size: 10px;
+.dropdown-toggle:hover { background: rgba(255, 255, 255, 0.05); color: #fff; }
+.dropdown-toggle:hover .toggle-label i { color: var(--blue-light); }
+
+.dropdown-toggle > i.fa-chevron-down {
+    font-size: 13px;
     color: rgba(255, 255, 255, 0.4);
     transition: transform 0.2s ease, color 0.15s ease;
 }
 
-/* chevron flips and glows when its section is open, same
-   "active/live" visual language used elsewhere */
-.sidebar-dropdown.open .dropdown-toggle {
-    color: #fff;
-}
+.sidebar-dropdown.open .dropdown-toggle { color: #fff; }
 
-.sidebar-dropdown.open .dropdown-toggle i {
-    transform: rotate(180deg);
-    color: var(--blue-light);
-}
+.sidebar-dropdown.open .dropdown-toggle .toggle-label i,
+.sidebar-dropdown.open .dropdown-toggle > i.fa-chevron-down { color: var(--blue-light); }
+
+.sidebar-dropdown.open .dropdown-toggle > i.fa-chevron-down { transform: rotate(180deg); }
 
 .dropdown-menu {
     display: none;
@@ -340,33 +325,34 @@ img {
     padding: 4px 0 8px 10px;
 }
 
-.sidebar-dropdown.open .dropdown-menu {
-    display: flex;
-}
+.sidebar-dropdown.open .dropdown-menu { display: flex; }
 
-/* sidebar footer / logout */
-.sidebar-footer {
-    padding: 16px 22px 22px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
+/* sidebar footer / logout — a bordered card, not a bare link */
+.sidebar-footer { padding: 16px 18px 20px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
 
 .logout-btn {
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 12.5px;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.5);
-    transition: color 0.15s ease;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 255, 255, 0.75);
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
+.logout-btn i { font-size: 15px; color: var(--blue-light); }
+.logout-btn .logout-copy { display: flex; flex-direction: column; line-height: 1.3; }
+.logout-btn .logout-title { font-size: 13px; font-weight: 600; color: #fff; }
+.logout-btn .logout-sub { font-size: 10.5px; color: rgba(255, 255, 255, 0.45); }
+
 .logout-btn:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(102, 149, 211, 0.4);
     color: #fff;
 }
 
-/* dark backdrop behind the sidebar on small screens, click
-   to close. Hidden and non-interactive until the sidebar
-   is open. */
 .sidebar-overlay {
     position: fixed;
     inset: 0;
@@ -377,12 +363,8 @@ img {
     z-index: 45;
 }
 
-.sidebar-overlay.visible {
-    opacity: 1;
-    visibility: visible;
-}
+.sidebar-overlay.visible { opacity: 1; visibility: visible; }
 
-/* hamburger — lives in the topbar, hidden on desktop */
 .sidebar-toggle {
     display: none;
     align-items: center;
@@ -398,15 +380,8 @@ img {
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
-.sidebar-toggle:hover {
-    border-color: var(--blue);
-    color: var(--blue);
-    background: var(--info-bg);
-}
-
-.sidebar-toggle .material-symbols-outlined {
-    font-size: 22px;
-}
+.sidebar-toggle:hover { border-color: var(--blue); color: var(--blue); background: var(--info-bg); }
+.sidebar-toggle .material-symbols-outlined { font-size: 22px; }
 
 /* ============================================================
    TOPBAR
@@ -427,16 +402,9 @@ img {
     transition: left 0.25s ease;
 }
 
-.topbar-left {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    min-width: 0;
-}
+.topbar-left { display: flex; align-items: center; gap: 14px; min-width: 0; }
 
 .topbar-title {
-    font-family: 'Oswald', sans-serif;
-    font-optical-sizing: auto;
     font-size: 18px;
     font-weight: 600;
     color: var(--ink);
@@ -446,32 +414,55 @@ img {
     text-overflow: ellipsis;
 }
 
+/* user chip: avatar (with live status dot) + name/role stack
+   + a small disclosure chevron */
 .topbar .user {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
     font-size: 13.5px;
     font-weight: 500;
     color: var(--text);
-    padding: 6px 12px 6px 6px;
+    padding: 6px 10px 6px 6px;
     border-radius: 999px;
     transition: background 0.15s ease;
     cursor: pointer;
     flex-shrink: 0;
 }
 
-.topbar .user:hover {
-    background: var(--bg);
+.topbar .user:hover { background: var(--bg); }
+
+.user-avatar {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--navy);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    flex-shrink: 0;
+    border: 2px solid var(--info-bg);
 }
 
-.topbar .user .material-symbols-outlined {
-    font-size: 26px;
-    color: var(--blue);
+.user-avatar .status-dot {
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--success);
+    border: 2px solid var(--surface);
 }
 
-.topbar .user .user-name {
-    white-space: nowrap;
-}
+.user-info { display: flex; flex-direction: column; line-height: 1.3; }
+.user-info .user-name { font-size: 14px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.user-info .user-role { font-size: 11px; font-weight: 500; color: var(--text-soft); }
+.topbar .user .material-symbols-outlined.chevron { font-size: 20px; color: var(--text-soft); }
 
 /* ============================================================
    MAIN CONTAINER
@@ -484,7 +475,6 @@ img {
     transition: margin-left 0.25s ease;
 }
 
-/* page heading block used at the top of each section */
 .page-head {
     display: flex;
     align-items: flex-end;
@@ -495,7 +485,6 @@ img {
 }
 
 .page-head .page-eyebrow {
-    font-family: 'Oswald', sans-serif;
     font-size: 11px;
     font-weight: 500;
     letter-spacing: 0.14em;
@@ -505,27 +494,84 @@ img {
 }
 
 .page-head .page-title {
-    font-family: 'Fraunces', serif;
-    font-optical-sizing: auto;
+    font-family: 'oswald' sans-serif;
     font-size: 25px;
     font-weight: 600;
     color: var(--ink);
 }
 
-.page-head .page-sub {
-    font-size: 13px;
-    color: var(--text-soft);
-    margin-top: 4px;
+.page-head .page-sub { font-size: 13px; color: var(--text-soft); margin-top: 4px; }
+
+/* dashboard-home welcome banner: greeting + subline on the
+   left, a date-range control on the right */
+.welcome-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 26px;
 }
+
+.welcome-head .welcome-title {
+    font-family: 'oswald' sans-serif;
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.welcome-head .welcome-sub { font-size: 13.5px; color: var(--text-soft); margin-top: 6px; }
+
+.date-picker {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.date-picker:hover { border-color: var(--blue); color: var(--blue); }
+.date-picker .material-symbols-outlined { font-size: 18px; color: var(--blue); }
+.date-picker .material-symbols-outlined.chevron { font-size: 16px; color: var(--text-soft); margin-left: 2px; }
+
+/* small dropdown used inside panel headers ("This Year") */
+.panel-select {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-soft);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.panel-select:hover { border-color: var(--blue); color: var(--blue); }
+.panel-select .material-symbols-outlined { font-size: 16px; }
 
 /* ============================================================
    STAT / SUMMARY CARDS
    ============================================================ */
 .stat-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 18px;
-    margin-bottom: 28px;
+    margin-bottom: 22px;
 }
 
 .stat-card {
@@ -539,41 +585,54 @@ img {
     transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.stat-card:hover {
-    box-shadow: var(--shadow-md);
-    transform: translateY(-2px);
-}
+.stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
 
-/* the flat blue bar becomes the login page's top-line
-   gradient: fades in from nothing, brightens toward
-   blue-light, fades back out */
-.stat-card::before {
+/* colored underline, driven by the card's own --accent so one
+   rule serves every hue */
+.stat-card::after {
     content: '';
     position: absolute;
-    top: 0;
+    bottom: 0;
     left: 0;
-    width: 3px;
-    height: 100%;
-    background: linear-gradient(180deg, rgba(102, 149, 211, 0) 0%, var(--blue) 30%, var(--blue-light) 65%, rgba(102, 149, 211, 0) 100%);
+    width: 100%;
+    height: 3px;
+    background: var(--accent, var(--blue));
+}
+
+.stat-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+/* rounded, tinted icon badge — the accent color sets both the
+   icon color and its own soft background via color-mix, so a
+   new metric family only ever means setting --accent */
+.stat-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--accent, var(--blue)) 14%, white);
+    color: var(--accent, var(--blue));
+    font-size: 19px;
+    flex-shrink: 0;
 }
 
 .stat-card .stat-label {
-    font-family: 'Oswald', sans-serif;
     font-size: 10.5px;
     font-weight: 500;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-soft);
-    margin-bottom: 10px;
+    text-align: right;
 }
 
-.stat-card .stat-value {
-    font-family: 'Oswald', sans-serif;
-    font-size: 30px;
-    font-weight: 600;
-    color: var(--ink);
-    line-height: 1;
-}
+.stat-card .stat-value { font-size: 30px; font-weight: 600; color: var(--ink); line-height: 1; }
 
 .stat-card .stat-delta {
     display: inline-flex;
@@ -586,6 +645,14 @@ img {
 
 .stat-delta.up { color: var(--success); }
 .stat-delta.down { color: var(--danger); }
+
+/* accent presets — pick one per card, e.g. class="stat-icon accent-purple" */
+.accent-blue    { --accent: var(--blue); }
+.accent-purple  { --accent: var(--purple); }
+.accent-teal    { --accent: var(--teal); }
+.accent-orange  { --accent: var(--warning); }
+.accent-green   { --accent: var(--success); }
+.accent-red     { --accent: var(--danger); }
 
 /* ============================================================
    PANELS / CARDS
@@ -609,34 +676,67 @@ img {
     border-bottom: 1px solid var(--border);
 }
 
-.panel-header .panel-title {
-    font-family: 'Oswald', sans-serif;
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--ink);
+.panel-header .panel-heading { display: flex; align-items: center; gap: 12px; }
+
+.panel-header .panel-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-sm);
+    background: var(--info-bg);
+    color: var(--blue);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
 }
 
-.panel-body {
-    padding: 22px;
+.panel-header .panel-title { font-size: 16px; font-weight: 600; color: var(--ink); }
+.panel-body { padding: 22px; }
+
+/* chart legend row (Approved / Pending / Rejected dots) */
+.chart-legend {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    font-size: 12.5px;
+    color: var(--text-soft);
+    font-weight: 500;
 }
+
+.chart-legend .legend-item { display: inline-flex; align-items: center; gap: 7px; }
+.chart-legend .legend-dot { width: 9px; height: 9px; border-radius: 50%; }
+.legend-dot.success { background: var(--success); }
+.legend-dot.warning { background: var(--warning); }
+.legend-dot.danger  { background: var(--danger); }
+.legend-dot.info    { background: var(--info); }
+
+/* empty-chart placeholder inside a .panel-body wrapping a chart */
+.chart-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 48px 20px;
+    color: var(--text-faint);
+    text-align: center;
+}
+
+.chart-empty .material-symbols-outlined { font-size: 40px; color: var(--border); }
+.chart-empty p { font-size: 13px; color: var(--text-soft); }
 
 /* ============================================================
    TABLES
    ============================================================ */
-.table-wrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-table.data-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13.5px;
-}
+table.data-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 
 .data-table thead th {
     text-align: left;
-    font-family: 'Oswald', sans-serif;
     font-size: 10.5px;
     font-weight: 500;
     letter-spacing: 0.08em;
@@ -648,25 +748,10 @@ table.data-table {
     white-space: nowrap;
 }
 
-.data-table tbody td {
-    padding: 13px 16px;
-    border-bottom: 1px solid var(--border);
-    color: var(--text);
-    vertical-align: middle;
-}
-
-.data-table tbody tr:last-child td {
-    border-bottom: none;
-}
-
-.data-table tbody tr:hover {
-    background: #f8fafc;
-}
-
-.data-table .row-actions {
-    display: flex;
-    gap: 6px;
-}
+.data-table tbody td { padding: 13px 16px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:hover { background: #f8fafc; }
+.data-table .row-actions { display: flex; gap: 6px; }
 
 /* ============================================================
    STATUS PILLS / BADGES
@@ -682,13 +767,7 @@ table.data-table {
     letter-spacing: 0.02em;
 }
 
-.badge::before {
-    content: '';
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: currentColor;
-}
+.badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
 .badge.success { background: var(--success-bg); color: var(--success); }
 .badge.warning { background: var(--warning-bg); color: var(--warning); }
@@ -696,17 +775,8 @@ table.data-table {
 .badge.info    { background: var(--info-bg);    color: var(--info); }
 .badge.neutral { background: var(--bg); color: var(--text-soft); }
 
-/* "live" status — mirrors the login page's pulsing route-node,
-   for records actively being processed right now */
-.badge.live {
-    background: var(--info-bg);
-    color: var(--blue);
-}
-
-.badge.live::before {
-    background: var(--blue-light);
-    animation: badge-pulse 2s ease-in-out infinite;
-}
+.badge.live { background: var(--info-bg); color: var(--blue); }
+.badge.live::before { background: var(--blue-light); animation: badge-pulse 2s ease-in-out infinite; }
 
 @keyframes badge-pulse {
     0%   { box-shadow: 0 0 0 0 rgba(102, 149, 211, 0.55); }
@@ -725,7 +795,6 @@ table.data-table {
     padding: 10px 18px;
     border-radius: var(--radius-sm);
     border: 1px solid transparent;
-    font-family: 'Oswald', sans-serif;
     font-size: 12.5px;
     font-weight: 600;
     letter-spacing: 0.04em;
@@ -734,78 +803,29 @@ table.data-table {
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
 }
 
-.btn .icon-svg,
-.btn .material-symbols-outlined {
-    font-size: 16px;
-    width: 16px;
-    height: 16px;
-}
+.btn .icon-svg, .btn .material-symbols-outlined { font-size: 16px; width: 16px; height: 16px; }
 
-.btn-primary {
-    background: var(--ink);
-    color: #fff;
-}
+.btn-primary { background: var(--ink); color: #fff; }
+.btn-primary:hover { background: var(--blue); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0, 95, 213, 0.28); }
 
-.btn-primary:hover {
-    background: var(--blue);
-    transform: translateY(-1px);
-    /* same glow language as the login button gets from sitting
-       near blue-light accents — keeps primary actions feeling
-       consistent with the rest of the login/dashboard pair */
-    box-shadow: 0 6px 20px rgba(0, 95, 213, 0.28);
-}
+.btn-outline { background: transparent; border-color: var(--border); color: var(--text); }
+.btn-outline:hover { border-color: var(--blue); color: var(--blue); }
 
-.btn-outline {
-    background: transparent;
-    border-color: var(--border);
-    color: var(--text);
-}
+.btn-danger { background: var(--danger-bg); color: var(--danger); }
+.btn-danger:hover { background: var(--danger); color: #fff; }
 
-.btn-outline:hover {
-    border-color: var(--blue);
-    color: var(--blue);
-}
+.btn-icon { padding: 8px; border-radius: var(--radius-sm); background: transparent; border: 1px solid var(--border); color: var(--text-soft); }
+.btn-icon:hover { border-color: var(--blue); color: var(--blue); }
 
-.btn-danger {
-    background: var(--danger-bg);
-    color: var(--danger);
-}
-
-.btn-danger:hover {
-    background: var(--danger);
-    color: #fff;
-}
-
-.btn-icon {
-    padding: 8px;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--text-soft);
-}
-
-.btn-icon:hover {
-    border-color: var(--blue);
-    color: var(--blue);
-}
-
-.btn:disabled {
-    opacity: 0.6;
-    cursor: default;
-    transform: none;
-    box-shadow: none;
-}
+.btn:disabled { opacity: 0.6; cursor: default; transform: none; box-shadow: none; }
 
 /* ============================================================
    FORMS (mirrors login field styling exactly)
    ============================================================ */
-.field {
-    margin-bottom: 18px;
-}
+.field { margin-bottom: 18px; }
 
 .field label {
     display: block;
-    font-family: 'Oswald', sans-serif;
     font-size: 11px;
     font-weight: 600;
     color: var(--ink);
@@ -814,9 +834,7 @@ table.data-table {
     margin-bottom: 7px;
 }
 
-.field input,
-.field select,
-.field textarea {
+.field input, .field select, .field textarea {
     width: 100%;
     padding: 11px 14px;
     border: 1px solid var(--border);
@@ -829,37 +847,19 @@ table.data-table {
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
-.field input:focus,
-.field select:focus,
-.field textarea:focus {
+.field input:focus, .field select:focus, .field textarea:focus {
     border-color: var(--blue);
     background: #fff;
-    /* identical focus ring to the login page's inputs */
     box-shadow: var(--glow-blue-soft);
 }
 
-.field input::placeholder,
-.field textarea::placeholder {
-    color: var(--text-faint);
-}
-
-.field-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-}
+.field input::placeholder, .field textarea::placeholder { color: var(--text-faint); }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
 /* ============================================================
    ALERTS
    ============================================================ */
-.alert {
-    padding: 12px 16px;
-    border-radius: var(--radius-sm);
-    font-size: 13px;
-    margin-bottom: 18px;
-    border-left: 3px solid transparent;
-}
-
+.alert { padding: 12px 16px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 18px; border-left: 3px solid transparent; }
 .alert.error   { background: var(--danger-bg);  color: var(--danger);  border-color: var(--danger); }
 .alert.success { background: var(--success-bg); color: var(--success); border-color: var(--success); }
 .alert.warning { background: var(--warning-bg); color: var(--warning); border-color: var(--warning); }
@@ -868,198 +868,119 @@ table.data-table {
 /* ============================================================
    EMPTY STATE
    ============================================================ */
-.empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--text-soft);
-}
-
-.empty-state .material-symbols-outlined {
-    font-size: 40px;
-    color: var(--text-faint);
-    margin-bottom: 12px;
-}
-
-.empty-state h3 {
-    font-family: 'Fraunces', serif;
-    font-size: 16px;
-    color: var(--ink);
-    margin-bottom: 6px;
-}
-
-.empty-state p {
-    font-size: 13px;
-}
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text-soft); }
+.empty-state .material-symbols-outlined { font-size: 40px; color: var(--text-faint); margin-bottom: 12px; }
+.empty-state h3 { font-family: 'Fraunces', serif; font-size: 16px; color: var(--ink); margin-bottom: 6px; }
+.empty-state p { font-size: 13px; }
 
 /* ============================================================
    PAGINATION
    ============================================================ */
-.pagination {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 6px;
-    padding: 16px 22px;
-    border-top: 1px solid var(--border);
-    flex-wrap: wrap;
+.pagination { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 16px 22px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.pagination button { min-width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text-soft); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.pagination button.active { background: var(--ink); border-color: var(--ink); color: #fff; }
+.pagination button:hover:not(.active) { border-color: var(--blue); color: var(--blue); }
+
+/* ============================================================
+   CHART ROW(S) (home page)
+   ============================================================ */
+.chart-row { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; }
+
+/* auto-fit variant for 3+ chart panels — used by reports.php,
+   which has a Programs-by-Status chart alongside the two above */
+.chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
 }
 
-.pagination button {
-    min-width: 32px;
-    height: 32px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
+.chart-grid .panel { margin-bottom: 0; }
+
+.chart-card {
     background: var(--surface);
-    color: var(--text-soft);
-    font-size: 12.5px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 20px 22px;
+}
+
+.chart-card h3 {
+    font-size: 15px;
     font-weight: 600;
-    cursor: pointer;
+    color: var(--ink);
+    margin-bottom: 16px;
 }
 
-.pagination button.active {
-    background: var(--ink);
-    border-color: var(--ink);
-    color: #fff;
+.chart-card canvas { max-height: 240px; }
+
+/* section eyebrow used above a stat-grid/chart-grid group,
+   e.g. "Applications" — same visual weight as .page-eyebrow */
+.db-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
 }
 
-.pagination button:hover:not(.active) {
-    border-color: var(--blue);
-    color: var(--blue);
-}
+.db-wrap { display: block; }
+
+/* colored stat values, for markup that colors the number
+   itself rather than an icon badge (pending/approved/rejected
+   variants used directly on .stat-value) */
+.stat-value.pending  { color: var(--warning); }
+.stat-value.approved { color: var(--success); }
+.stat-value.rejected { color: var(--danger); }
 
 /* ============================================================
    RESPONSIVE
-
-   Breakpoints:
-   - 1200px  desktop sidebar narrows slightly, page padding tightens
-   - 1024px  sidebar narrows further (tablet landscape)
-   - 860px   sidebar becomes an off-canvas drawer + hamburger appears
-   - 640px   phones: tighter spacing, stat cards stack, tables scroll
-   - 400px   very small phones: minimal chrome
    ============================================================ */
 @media (max-width: 1200px) {
-    :root {
-        --sidebar-w: 236px;
-    }
+    :root { --sidebar-w: 236px; }
 }
 
 @media (max-width: 1024px) {
-    :root {
-        --sidebar-w: 220px;
-    }
-
-    .container {
-        padding: 24px 24px 50px;
-    }
+    :root { --sidebar-w: 220px; }
+    .container { padding: 24px 24px 50px; }
+    .chart-row { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 860px) {
-    :root {
-        --sidebar-w: 272px;
-    }
+    :root { --sidebar-w: 272px; }
 
-    /* sidebar becomes a fixed-width off-canvas drawer,
-       independent of the reflow above */
-    .main-sidebar {
-        transform: translateX(-100%);
-        box-shadow: 0 0 40px rgba(7, 21, 48, 0.35);
-    }
+    .main-sidebar { transform: translateX(-100%); box-shadow: 0 0 40px rgba(7, 21, 48, 0.35); }
+    .main-sidebar.open { transform: translateX(0); }
+    .sidebar-close { display: inline-flex; }
+    .sidebar-toggle { display: inline-flex; }
 
-    .main-sidebar.open {
-        transform: translateX(0);
-    }
-
-    .sidebar-close {
-        display: inline-flex;
-    }
-
-    .sidebar-toggle {
-        display: inline-flex;
-    }
-
-    .topbar,
-    .container {
-        left: 0;
-        margin-left: 0;
-    }
-
-    .topbar {
-        padding: 0 18px;
-    }
-
-    .field-row {
-        grid-template-columns: 1fr;
-    }
+    .topbar, .container { left: 0; margin-left: 0; }
+    .topbar { padding: 0 18px; }
+    .field-row { grid-template-columns: 1fr; }
+    .user-info { display: none; }
 }
 
 @media (max-width: 640px) {
-    .topbar {
-        height: 60px;
-        padding: 0 14px;
-    }
-
-    :root {
-        --topbar-h: 60px;
-    }
-
-    .topbar-title {
-        font-size: 15.5px;
-    }
-
-    .topbar .user .user-name {
-        display: none;
-    }
-
-    .container {
-        padding: 18px 16px 40px;
-    }
-
-    .page-head {
-        margin-bottom: 18px;
-    }
-
-    .page-head .page-title {
-        font-size: 20px;
-    }
-
-    .stat-grid {
-        grid-template-columns: 1fr;
-        gap: 12px;
-        margin-bottom: 20px;
-    }
-
-    .panel-header {
-        padding: 14px 16px;
-    }
-
-    .panel-body {
-        padding: 16px;
-    }
-
-    .pagination {
-        justify-content: center;
-        padding: 14px 16px;
-    }
+    .topbar { height: 60px; padding: 0 14px; }
+    :root { --topbar-h: 60px; }
+    .topbar-title { font-size: 15.5px; }
+    .container { padding: 18px 16px 40px; }
+    .page-head { margin-bottom: 18px; }
+    .page-head .page-title { font-size: 20px; }
+    .welcome-head { margin-bottom: 18px; }
+    .welcome-head .welcome-title { font-size: 20px; }
+    .date-picker { width: 100%; justify-content: space-between; }
+    .stat-grid { grid-template-columns: 1fr; gap: 12px; margin-bottom: 20px; }
+    .panel-header { padding: 14px 16px; }
+    .panel-body { padding: 16px; }
+    .pagination { justify-content: center; padding: 14px 16px; }
 }
 
 @media (max-width: 400px) {
-    .main-sidebar {
-        width: 88vw;
-    }
-
-    .sidebar-header {
-        padding: 18px 16px;
-    }
-
-    .brand-text h4 {
-        font-size: 13px;
-    }
-
-    .stat-card {
-        padding: 16px 18px;
-    }
-
-    .stat-card .stat-value {
-        font-size: 25px;
-    }
+    .main-sidebar { width: 88vw; }
+    .sidebar-header { padding: 18px 16px; }
+    .brand-text h4 { font-size: 13px; }
+    .stat-card { padding: 16px 18px; }
+    .stat-card .stat-value { font-size: 25px; }
 }
