@@ -19,6 +19,7 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
+// FIXED: Changed a.applicant_id to a.user_id
 $stmt = $pdo->prepare("
     SELECT
         a.id AS application_id,
@@ -30,8 +31,7 @@ $stmt = $pdo->prepare("
         p.end_date,
 
         pr.institution_name AS partner_institution,
-        pr.country
-
+        c.country_name AS country
     FROM applications a
 
     LEFT JOIN programs p
@@ -39,6 +39,9 @@ $stmt = $pdo->prepare("
 
     LEFT JOIN partners pr
         ON pr.id = p.partner_id
+
+    LEFT JOIN countries c
+        ON c.id = p.country_id
 
     WHERE a.applicant_id = ?
 
@@ -48,6 +51,11 @@ $stmt = $pdo->prepare("
 $stmt->execute([$user_id]);
 $applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Calculate summary counts
+$total = count($applications);
+$pending = count(array_filter($applications, fn($a) => strtolower($a['app_status']) === 'pending'));
+$approved = count(array_filter($applications, fn($a) => strtolower($a['app_status']) === 'approved'));
+$rejected = count(array_filter($applications, fn($a) => strtolower($a['app_status']) === 'rejected'));
 ?>
 
 <link rel="stylesheet" href="../asset/css/my_applications.css">
@@ -72,30 +80,12 @@ $applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
             <h3>No applications yet</h3>
             <p>You haven't applied to any mobility programs. Browse available programs and submit your first application.</p>
+            <a href="?page=available_programs" class="btn-primary">Explore Programs</a>
         </div>
 
     <?php else: ?>
 
         <!-- SUMMARY BADGES -->
-            <?php
-            $total = count($applications);
-
-            $pending = count(array_filter(
-                $applications,
-                fn($a) => strtolower($a['app_status']) === 'pending'
-            ));
-
-            $approved = count(array_filter(
-                $applications,
-                fn($a) => strtolower($a['app_status']) === 'approved'
-            ));
-
-            $rejected = count(array_filter(
-                $applications,
-                fn($a) => strtolower($a['app_status']) === 'rejected'
-            ));
-            ?>
-
         <div class="summary-bar">
             <div class="summary-item active-filter" data-filter="all">
                 <span class="summary-count"><?= $total ?></span>
@@ -120,7 +110,6 @@ $applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <table class="applications-table">
                 <thead>
                     <tr>
-                        <th>#</th>
                         <th>Program</th>
                         <th>Partner Institution</th>
                         <th>Country</th>
@@ -132,8 +121,7 @@ $applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 </thead>
                 <tbody id="applicationsBody">
                     <?php foreach ($applications as $i => $app): ?>
-                        <tr data-status="<?= ucfirst(strtolower($app['app_status'])) ?>">                            <td class="row-num"><?= $i + 1 ?></td>
-
+                        <tr data-status="<?= ucfirst(strtolower($app['app_status'])) ?>">                            
                             <td class="program-name-cell">
                                 <?= e($app['program_name']) ?>
                             </td>
@@ -175,13 +163,11 @@ $applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <td>
                                 <?php
                                 $status = ucfirst(strtolower($app['app_status']));
-
                                 $badge_class = match($status) {
                                     'Approved' => 'badge-approved',
                                     'Rejected' => 'badge-rejected',
                                     default    => 'badge-pending',
                                 };
-
                                 $icon = match($status) {
                                     'Approved' => 'fa-circle-check',
                                     'Rejected' => 'fa-circle-xmark',
@@ -203,13 +189,8 @@ $applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     'UTF-8'
                                 );
                                 ?>
-
-                                <button
-                                    class="btn-view"
-                                    onclick='openModal(<?= $jsonApp ?>)'
-                                >
-                                    <i class="fa-solid fa-eye"></i>
-                                    View
+                                <button class="btn-view" onclick='openModal(<?= $jsonApp ?>)'>
+                                    <i class="fa-solid fa-eye"></i> View
                                 </button>
                             </td>
                         </tr>
@@ -245,53 +226,37 @@ $applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
 
         <div class="modal-body">
-
             <div class="modal-grid">
                 <div class="modal-field">
-                    <span class="modal-field-label">
-                        <i class="fa-solid fa-location-dot"></i> Country
-                    </span>
+                    <span class="modal-field-label"><i class="fa-solid fa-location-dot"></i> Country</span>
                     <span class="modal-field-value" id="modalCountry"></span>
                 </div>
                 <div class="modal-field">
-                    <span class="modal-field-label">
-                        <i class="fa-solid fa-calendar-days"></i> Start Date
-                    </span>
+                    <span class="modal-field-label"><i class="fa-solid fa-calendar-days"></i> Start Date</span>
                     <span class="modal-field-value" id="modalStart"></span>
                 </div>
                 <div class="modal-field">
-                    <span class="modal-field-label">
-                        <i class="fa-solid fa-calendar-check"></i> End Date
-                    </span>
+                    <span class="modal-field-label"><i class="fa-solid fa-calendar-check"></i> End Date</span>
                     <span class="modal-field-value" id="modalEnd"></span>
                 </div>
                 <div class="modal-field">
-                    <span class="modal-field-label">
-                        <i class="fa-solid fa-clock"></i> Date Applied
-                    </span>
+                    <span class="modal-field-label"><i class="fa-solid fa-clock"></i> Date Applied</span>
                     <span class="modal-field-value" id="modalDateApplied"></span>
                 </div>
             </div>
 
             <div class="modal-field modal-field-full">
-                <span class="modal-field-label">
-                    <i class="fa-solid fa-align-left"></i> Program Description
-                </span>
+                <span class="modal-field-label"><i class="fa-solid fa-align-left"></i> Program Description</span>
                 <p class="modal-field-text" id="modalDescription"></p>
             </div>
 
             <div class="modal-status-row">
-                <span class="modal-field-label">
-                    <i class="fa-solid fa-circle-info"></i> Application Status
-                </span>
+                <span class="modal-field-label"><i class="fa-solid fa-circle-info"></i> Application Status</span>
                 <span class="status-badge" id="modalStatus"></span>
             </div>
-
         </div>
 
     </div>
-
-    
 </div>
 
 <script>
@@ -317,16 +282,17 @@ document.querySelectorAll('.summary-item').forEach(item => {
 
 /* ---- MODAL ---- */
 function openModal(app) {
-    document.getElementById('modalProgramName').textContent  = app.program_name;
-    document.getElementById('modalPartner').textContent      = app.partner_institution;
-    document.getElementById('modalCountry').textContent      = app.country;
+    document.getElementById('modalProgramName').textContent  = app.program_name || 'N/A';
+    document.getElementById('modalPartner').textContent      = app.partner_institution || 'N/A';
+    document.getElementById('modalCountry').textContent      = app.country || 'N/A';
     document.getElementById('modalStart').textContent        = formatDate(app.start_date);
     document.getElementById('modalEnd').textContent          = formatDate(app.end_date);
     document.getElementById('modalDateApplied').textContent  = formatDate(app.date_applied);
-    document.getElementById('modalDescription').textContent ='No description available.';
-    const status =
-        app.app_status.charAt(0).toUpperCase() +
-        app.app_status.slice(1).toLowerCase();    const statusEl   = document.getElementById('modalStatus');
+    document.getElementById('modalDescription').textContent = app.description || 'No description available for this program.';
+    
+    const status = (app.app_status || 'pending').charAt(0).toUpperCase() + (app.app_status || 'pending').slice(1).toLowerCase();
+    const statusEl = document.getElementById('modalStatus');
+    
     const badgeClass = status === 'Approved' ? 'badge-approved'
                      : status === 'Rejected' ? 'badge-rejected'
                      : 'badge-pending';

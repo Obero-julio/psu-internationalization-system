@@ -1,126 +1,235 @@
+/* =========================
+   MOBILITY SCHEDULE PAGE
+   PSU × IZN Design System
+========================= */
+
 .content-card {
-    padding: 25px;
-    background: var(--bg);
-    color: var(--text);
-}
-
-/* HEADER */
-.page-header {
-    margin-bottom: 20px;
-}
-
-.page-header h2 {
-    font-size: 22px;
-    margin-bottom: 5px;
-}
-
-.page-header p {
-    color: var(--muted);
-    font-size: 14px;
-}
-
-/* EMPTY */
-.empty-state {
-    text-align: center;
-    padding: 40px;
-    background: var(--card);
-    border: 1px dashed var(--border);
-    border-radius: 12px;
-    color: var(--muted);
-}
-
-/* TIMELINE */
-.timeline {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-
-/* ITEM */
-.timeline-item {
-    display: flex;
-    gap: 15px;
-    align-items: flex-start;
-}
-
-/* DOT */
-.timeline-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    margin-top: 6px;
-    background: var(--primary);
-    box-shadow: 0 0 10px rgba(79, 124, 255, 0.4);
-}
-
-.timeline-dot.pending {
-    background: #ffc107;
-}
-
-.timeline-dot.approved {
-    background: #22c55e;
-}
-
-.timeline-dot.rejected {
-    background: #ef4444;
-}
-
-/* CONTENT */
-.timeline-content {
-    background: var(--card);
-    border: 1px solid var(--border);
-    padding: 15px;
-    border-radius: 12px;
+    background: var(--white);
+    padding: 32px;
+    border-radius: 20px;
+    border: 1px solid var(--gray-200);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02), 0 10px 20px -10px rgba(0,0,0,0.04);
     width: 100%;
 }
 
-.timeline-content h3 {
+/* --- Page header --- */
+.page-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--gray-100);
+    margin-bottom: 32px;
+}
+
+.page-header-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--navy-800);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gold);
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.page-header h2 {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--navy-800);
+    margin: 0 0 4px;
+    font-family: var(--font-display);
+}
+
+.page-header p {
+    font-size: 0.85rem;
+    color: var(--gray-500);
     margin: 0;
-    font-size: 16px;
 }
 
-.location {
-    font-size: 13px;
-    color: var(--muted);
-    margin: 5px 0;
+/* =========================
+   TIMELINE
+========================= */
+
+.timeline {
+    position: relative;
+    padding-left: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
 }
 
-.date {
-    font-size: 13px;
-    color: var(--text);
-    margin-bottom: 10px;
+/* The vertical line */
+.timeline::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 4px;
+    width: 2px;
+    background: var(--gray-200);
+    border-radius: 2px;
 }
 
-/* BADGE */
+.timeline-item {
+    position: relative;
+}
+
+/* The dot on the line */
+.timeline-dot {
+    position: absolute;
+    left: -24px;
+    top: 6px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--gray-300);
+    border: 2px solid var(--white);
+    box-shadow: 0 0 0 2px var(--gray-200);
+    z-index: 2;
+}
+
+.timeline-dot.approved { background: var(--green); box-shadow: 0 0 0 2px var(--green); }
+.timeline-dot.pending { background: var(--orange); box-shadow: 0 0 0 2px var(--orange); }
+.timeline-dot.rejected { background: var(--red); box-shadow: 0 0 0 2px var(--red); }
+
+/* The card */
+.timeline-content {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 16px;
+    padding: 20px;
+    transition: all 0.2s ease;
+}
+
+.timeline-content:hover {
+    background: var(--white);
+    border-color: var(--gold);
+    box-shadow: var(--shadow-sm);
+    transform: translateX(4px);
+}
+
+.timeline-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.timeline-header h3 {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--navy-800);
+    margin: 0;
+    font-family: var(--font-display);
+}
+
+.location, .date {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--gray-600);
+    margin: 0 0 8px;
+    font-weight: 500;
+}
+
+.location i { color: var(--gold-dark); }
+.date i { color: var(--blue); }
+.date { margin-bottom: 0; }
+
+/* =========================
+   BADGES
+========================= */
+
 .badge {
-    display: inline-block;
-    padding: 5px 10px;
-    border-radius: 20px;
-    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
 }
 
-.badge.pending {
-    background: rgba(255, 193, 7, 0.15);
-    color: #ffc107;
+.badge.pending { background: #fffbeb; border: 1px solid #fde68a; color: var(--orange); }
+.badge.approved { background: #f0fdf4; border: 1px solid #bbf7d0; color: var(--green); }
+.badge.rejected { background: #fef2f2; border: 1px solid #fecaca; color: var(--red); }
+
+/* =========================
+   EMPTY STATE
+========================= */
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    text-align: center;
 }
 
-.badge.approved {
-    background: rgba(34, 197, 94, 0.15);
-    color: #22c55e;
+.empty-state-icon {
+    width: 72px;
+    height: 72px;
+    background: var(--gray-100);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gray-400);
+    font-size: 2rem;
+    margin-bottom: 20px;
 }
 
-.badge.rejected {
-    background: rgba(239, 68, 68, 0.15);
-    color: #ef4444;
+.empty-state h3 {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--navy-800);
+    margin: 0 0 8px;
+    font-family: var(--font-display);
 }
 
-/* RESPONSIVE */
-@media (max-width: 768px) {
-    .timeline-item {
+.empty-state p {
+    font-size: 0.9rem;
+    color: var(--gray-500);
+    max-width: 340px;
+    line-height: 1.6;
+    margin: 0 0 24px;
+}
+
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: var(--gold);
+    color: var(--navy-800);
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    text-decoration: none;
+}
+
+.btn-primary:hover {
+    background: var(--gold-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow);
+    color: var(--white);
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 600px) {
+    .timeline-header {
         flex-direction: column;
-    }
-
-    .timeline-dot {
-        display: none;
+        align-items: flex-start;
     }
 }

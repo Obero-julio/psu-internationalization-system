@@ -11,31 +11,30 @@ function e($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
-/* DEFAULT DATA (fallback) */
 $schedule = [];
-
-/*
-UNCOMMENT WHEN DB IS READY
 
 if ($user_id) {
     $pdo = db();
 
+    // FIXED: Uncommented and properly joined to get program name, destination, and dates
     $stmt = $pdo->prepare("
         SELECT 
-            program_name,
-            destination,
-            start_date,
-            end_date,
-            status
-        FROM applications
-        WHERE user_id = ?
-        ORDER BY start_date ASC
+            p.program_name,
+            c.country_name AS destination,
+            p.start_date,
+            p.end_date,
+            a.status
+        FROM applications a
+        JOIN programs p ON a.program_id = p.id
+        LEFT JOIN partners pr ON p.partner_id = pr.id
+        LEFT JOIN countries c ON pr.country_id = c.id
+        WHERE a.applicant_id = ? 
+        ORDER BY p.start_date ASC
     ");
 
     $stmt->execute([$user_id]);
     $schedule = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
-*/
 ?>
 
 <link rel="stylesheet" href="../asset/css/mobility_sched.css">
@@ -43,15 +42,24 @@ if ($user_id) {
 <div class="content-card">
 
     <div class="page-header">
-        <h2>Mobility Schedule</h2>
-        <p>Your program timeline and travel schedule overview.</p>
+        <div class="page-header-icon">
+            <i class="fa-regular fa-calendar-check"></i>
+        </div>
+        <div>
+            <h2>Mobility Schedule</h2>
+            <p>Your program timeline and travel schedule overview.</p>
+        </div>
     </div>
 
     <?php if (empty($schedule)): ?>
 
         <div class="empty-state">
+            <div class="empty-state-icon">
+                <i class="fa-regular fa-calendar-xmark"></i>
+            </div>
             <h3>No Schedule Available</h3>
-            <p>Your mobility schedule will appear once your application is approved.</p>
+            <p>Your mobility schedule will appear here once you have submitted an application.</p>
+            <a href="?page=available_programs" class="btn-primary">Browse Programs</a>
         </div>
 
     <?php else: ?>
@@ -62,12 +70,15 @@ if ($user_id) {
 
                 <?php
                     $status = strtolower($s['status'] ?? 'pending');
-
                     $statusClass = match ($status) {
                         'approved' => 'approved',
                         'rejected' => 'rejected',
                         default => 'pending'
                     };
+                    
+                    // Format dates nicely
+                    $startFormatted = !empty($s['start_date']) ? date('M d, Y', strtotime($s['start_date'])) : 'TBD';
+                    $endFormatted = !empty($s['end_date']) ? date('M d, Y', strtotime($s['end_date'])) : 'TBD';
                 ?>
 
                 <div class="timeline-item">
@@ -75,23 +86,22 @@ if ($user_id) {
                     <div class="timeline-dot <?= e($statusClass) ?>"></div>
 
                     <div class="timeline-content">
-
-                        <h3><?= e($s['program_name'] ?? '') ?></h3>
+                        <div class="timeline-header">
+                            <h3><?= e($s['program_name'] ?? 'Unknown Program') ?></h3>
+                            <span class="badge <?= e($statusClass) ?>">
+                                <?= e(ucfirst($status)) ?>
+                            </span>
+                        </div>
 
                         <p class="location">
-                            📍 <?= e($s['destination'] ?? '') ?>
+                            <i class="fa-solid fa-location-dot"></i>
+                            <?= e($s['destination'] ?? 'Destination TBD') ?>
                         </p>
 
                         <p class="date">
-                            <?= e($s['start_date'] ?? '--') ?>
-                            →
-                            <?= e($s['end_date'] ?? '--') ?>
+                            <i class="fa-regular fa-clock"></i>
+                            <?= e($startFormatted) ?> &nbsp;&rarr;&nbsp; <?= e($endFormatted) ?>
                         </p>
-
-                        <span class="badge <?= e($statusClass) ?>">
-                            <?= e(ucfirst($status)) ?>
-                        </span>
-
                     </div>
 
                 </div>

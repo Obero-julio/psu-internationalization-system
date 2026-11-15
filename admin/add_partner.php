@@ -1,5 +1,5 @@
 <?php
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
 require_once __DIR__ . '/../config/db.php';
@@ -7,129 +7,89 @@ require_once __DIR__ . '/../config/db.php';
 header('Content-Type: application/json');
 
 try {
-
     $pdo = db();
 
-    /* =========================
-       GET FORM DATA
-    ========================= */
+    /* GET FORM DATA */
+    $country_id     = trim($_POST['country_id'] ?? '');
+    $country_manual = trim($_POST['country_manual'] ?? '');
+    $institution    = trim($_POST['institution_name'] ?? '');
+    $agreementName  = trim($_POST['agreement_type'] ?? '');
+    $status         = ucfirst(strtolower(trim($_POST['status'] ?? 'Active'))); 
+    
+    $firstName      = trim($_POST['contact_first_name'] ?? '');
+    $middleName     = trim($_POST['contact_mi'] ?? '');
+    $lastName       = trim($_POST['contact_last_name'] ?? '');
+    $email          = trim($_POST['contact_email'] ?? '');
+    $expiry         = trim($_POST['expiry_date'] ?? '');
+    $notes          = trim($_POST['notes'] ?? '');
 
-    $country = trim($_POST['country'] ?? '');
-    $countryManual = trim($_POST['country_manual'] ?? '');
-
-    if ($country === '__other__') {
-        $country = $countryManual;
-    }
-
-    $institution = trim($_POST['institution_name'] ?? '');
-    $institutionManual = trim($_POST['institution_manual'] ?? '');
-
-    if ($institution === '__other__') {
-        $institution = $institutionManual;
-    }
-
-    $agreement = trim($_POST['agreement_type'] ?? '');
-    $status = trim($_POST['status'] ?? 'active');
-
-    $firstName = trim($_POST['contact_first_name'] ?? '');
-    $middleName = trim($_POST['contact_mi'] ?? '');
-    $lastName = trim($_POST['contact_last_name'] ?? '');
-
-    $email = trim($_POST['contact_email'] ?? '');
-    $expiry = trim($_POST['expiry_date'] ?? '');
-    $notes = trim($_POST['notes'] ?? '');
-
-    if ($country === '' || $institution === '') {
-        echo json_encode([
-            'success' => false,
-            'message' => 'Country and Institution are required.'
-        ]);
+    if ($institution === '') {
+        echo json_encode(['success' => false, 'message' => 'Institution name is required.']);
         exit;
     }
 
-    /* =========================
-       COUNTRY ID
-    ========================= */
+    /* HANDLE COUNTRY */
+    $countryName = '';
 
-    $stmt = $pdo->prepare("SELECT id FROM countries WHERE country_name = ?");
-    $stmt->execute([$country]);
-    $countryId = $stmt->fetchColumn();
-
-    if (!$countryId) {
-
-        $stmt = $pdo->prepare("
-            INSERT INTO countries(country_name)
-            VALUES(?)
-        ");
-
-        $stmt->execute([$country]);
-
-        $countryId = $pdo->lastInsertId();
+    if ($country_id === '__other__') {
+        $countryName = $country_manual;
+    } elseif (is_numeric($country_id)) {
+        // Look up the name from the countries_addresses table (where the dropdown came from)
+        $stmt = $pdo->prepare("SELECT country_name FROM countries_addresses WHERE id = ?");
+        $stmt->execute([$country_id]);
+        $countryName = $stmt->fetchColumn();
     }
 
-    /* =========================
-       AGREEMENT TYPE ID
-    ========================= */
+    if (!$countryName) {
+        echo json_encode(['success' => false, 'message' => 'Invalid or missing country.']);
+        exit;
+    }
 
+    // Now find or create the country in the `countries` table (the one with the Foreign Key)
+    $stmt = $pdo->prepare("SELECT id FROM countries WHERE country_name = ?");
+    $stmt->execute([$countryName]);
+    $realCountryId = $stmt->fetchColumn();
+
+    if (!$realCountryId) {
+        // It doesn't exist in `countries` yet, so create it
+        $stmt = $pdo->prepare("INSERT INTO countries (country_name) VALUES (?)");
+        $stmt->execute([$countryName]);
+        $realCountryId = $pdo->lastInsertId();
+    }
+
+    /* HANDLE AGREEMENT TYPE */
     $agreementId = null;
-
-    if ($agreement !== '') {
-
-        $stmt = $pdo->prepare("
-            SELECT id
-            FROM agreement_types
-            WHERE agreement_name = ?
-        ");
-
-        $stmt->execute([$agreement]);
-
+    if ($agreementName !== '') {
+        $stmt = $pdo->prepare("SELECT id FROM agreement_types WHERE agreement_name = ?");
+        $stmt->execute([$agreementName]);
         $agreementId = $stmt->fetchColumn();
-
+        
         if (!$agreementId) {
-
-            $stmt = $pdo->prepare("
-                INSERT INTO agreement_types(agreement_name)
-                VALUES(?)
-            ");
-
-            $stmt->execute([$agreement]);
-
+            $stmt = $pdo->prepare("INSERT INTO agreement_types (agreement_name) VALUES (?)");
+            $stmt->execute([$agreementName]);
             $agreementId = $pdo->lastInsertId();
         }
     }
 
-    /* =========================
-       INSERT PARTNER
-    ========================= */
-
+    /* INSERT PARTNER */
     $stmt = $pdo->prepare("
-        INSERT INTO partners
-        (
-            institution_name,
-            country_id,
-            agreement_type_id,
-            contact_first_name,
-            contact_middle_name,
-            contact_last_name,
-            contact_email,
-            expiry_date,
-            status,
-            notes
-        )
-        VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO partners (
+            institution_name, country_id, agreement_type_id, status, 
+            contact_first_name, contact_middle_name, contact_last_name, 
+            contact_email, expiry_date, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
-
+    
     $stmt->execute([
-        $institution,
-        $countryId,
-        $agreementId,
-        $firstName ?: null,
-        $middleName ?: null,
-        $lastName ?: null,
-        $email ?: null,
-        $expiry ?: null,
+        $institution, 
+        (int)$realCountryId, 
+        $agreementId ? (int)$agreementId : null, 
         $status,
+        $firstName ?: null, 
+        $middleName ?: null, 
+        $lastName ?: null, 
+        $email ?: null, 
+        $expiry ?: null, 
         $notes ?: null
     ]);
 
@@ -138,11 +98,10 @@ try {
         'message' => 'Partner added successfully.'
     ]);
 
-} catch (PDOException $e) {
-
+} catch (Throwable $e) {
+    error_log("Add Partner Error: " . $e->getMessage());
     echo json_encode([
         'success' => false,
-        'message' => $e->getMessage()
+        'message' => 'DB Error: ' . $e->getMessage()
     ]);
-
 }

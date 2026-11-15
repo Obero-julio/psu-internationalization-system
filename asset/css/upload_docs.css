@@ -1,210 +1,199 @@
 /* =========================
-   UPLOAD DOCUMENTS
+   UPLOAD DOCUMENTS PAGE
    PSU × IZN Design System
 ========================= */
 
-/* --- Card wrapper --- */
-.content-card{
-    background:#fff;
-    padding:28px 32px;
-    border-radius:12px;
-    border:1px solid #E2E8F0;
-    margin:20px;
+.content-card {
+    background: var(--white);
+    padding: 32px;
+    border-radius: 20px;
+    border: 1px solid var(--gray-200);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02), 0 10px 20px -10px rgba(0,0,0,0.04);
+    width: 100%;
 }
 
-/* --- Page Header --- */
-.page-header{
-    display:flex;
-    align-items:center;
-    gap:14px;
-    padding-bottom:20px;
-    border-bottom:1px solid #F1F5F9;
-    margin-bottom:24px;
+.page-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--gray-100);
+    margin-bottom: 24px;
 }
 
-.page-header h2{
-    margin:0 0 3px;
-    font-size:16px;
-    font-weight:700;
-    color:#0E1C36;
-    line-height:1.2;
+.page-header-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--navy-800);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gold);
+    font-size: 20px;
+    flex-shrink: 0;
 }
 
-.page-header p{
-    margin:0;
-    font-size:12.5px;
-    color:#64748B;
+.page-header h2 {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--navy-800);
+    margin: 0 0 4px;
+    font-family: var(--font-display);
 }
 
-/* --- Upload Card --- */
-.upload-card{
-    background:#fff;
-    border:1px solid #E2E8F0;
-    border-radius:12px;
-    padding:22px;
+.page-header p {
+    font-size: 0.85rem;
+    color: var(--gray-500);
+    margin: 0;
 }
 
-/* --- Form Layout --- */
-.upload-form{
-    display:flex;
-    flex-direction:column;
-    gap:18px;
+/* ALERTS */
+.alert {
+    padding: 16px 20px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.alert-success { background: #f0fdf4; border: 1px solid #bbf7d0; color: var(--green); }
+.alert-error { background: #fef2f2; border: 1px solid #fecaca; color: var(--red); }
+
+/* CHECKLIST */
+.checklist-wrapper {
+    margin-top: 8px;
 }
 
-/* --- Form Group --- */
-.form-group{
-    display:flex;
-    flex-direction:column;
-    gap:6px;
+.checklist-wrapper h3 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    color: var(--navy-800);
+    margin: 0 0 4px;
+    font-size: 1.1rem;
 }
 
-/* --- Labels --- */
-.form-group label{
-    font-size:11.5px;
-    font-weight:700;
-    color:#334155;
-    text-transform:uppercase;
-    letter-spacing:.05em;
+.checklist-desc {
+    font-size: 0.85rem;
+    color: var(--gray-500);
+    margin: 0 0 20px;
 }
 
-/* --- File Input --- */
-.form-group input[type="file"]{
-    width:100%;
-    padding:10px 12px;
-    border:1px solid #E2E8F0;
-    border-radius:8px;
-    background:#F8FAFC;
-    font-size:13.5px;
-    color:#1E293B;
-    transition:.18s;
+.checklist-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
-.form-group input[type="file"]:focus{
-    outline:none;
-    border-color:#C9A227;
-    background:#fff;
-    box-shadow:0 0 0 3px rgba(201,162,39,.12);
+.checklist-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 14px;
+    transition: all 0.2s;
 }
 
-.form-group input[type="file"]::file-selector-button{
-    border:none;
-    background:#0E1C36;
-    color:#C9A227;
-    padding:8px 14px;
-    border-radius:6px;
-    margin-right:12px;
-    cursor:pointer;
-    font-weight:700;
-    font-size:12px;
+.checklist-item:hover {
+    background: var(--white);
+    border-color: var(--gray-300);
+    box-shadow: var(--shadow-sm);
 }
 
-.form-group input[type="file"]::file-selector-button:hover{
-    background:#162944;
+.checklist-item.completed {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
 }
 
-/* --- Submit Button --- */
-.btn-upload,
-.btn{
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    gap:8px;
-
-    background:#0E1C36;
-    color:#C9A227;
-
-    padding:10px 22px;
-    border:none;
-    border-radius:8px;
-
-    font-size:13.5px;
-    font-weight:700;
-    letter-spacing:.02em;
-
-    cursor:pointer;
-    transition:.18s;
+.checklist-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--gray-200);
+    color: var(--gray-500);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
 }
 
-.btn-upload:hover,
-.btn:hover{
-    background:#162944;
+.checklist-item.completed .checklist-icon {
+    background: var(--green);
+    color: var(--white);
 }
 
-.btn-upload:active,
-.btn:active{
-    transform:scale(.97);
+.checklist-info {
+    flex: 1;
+    min-width: 0;
 }
 
-/* --- Success Alert --- */
-.alert-success{
-    display:flex;
-    align-items:flex-start;
-    gap:10px;
-
-    padding:12px 16px;
-    margin-bottom:20px;
-
-    background:#F0FDF4;
-    border:1px solid #BBF7D0;
-    border-radius:8px;
-
-    color:#166534;
-    font-size:13px;
+.checklist-info strong {
+    display: block;
+    color: var(--navy-800);
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-bottom: 4px;
 }
 
-/* --- Error Alert --- */
-.alert-error{
-    display:flex;
-    align-items:flex-start;
-    gap:10px;
-
-    padding:12px 16px;
-    margin-bottom:20px;
-
-    background:#FFF5F5;
-    border:1px solid #FECACA;
-    border-radius:8px;
-
-    color:#991B1B;
-    font-size:13px;
+.checklist-info small {
+    display: block;
+    color: var(--gray-500);
+    font-size: 0.8rem;
 }
 
-/* --- Document Preview --- */
-.document-preview{
-    margin-top:18px;
-    padding:16px;
-    border:1px solid #E2E8F0;
-    border-radius:10px;
-    background:#F8FAFC;
+.view-file {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--blue);
+    margin-top: 8px;
+    text-decoration: none;
+}
+.view-file:hover { text-decoration: underline; }
+
+/* UPLOAD BUTTON */
+.upload-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: var(--navy-800);
+    color: var(--white);
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 
-.document-preview h4{
-    margin:0 0 6px;
-    font-size:13px;
-    font-weight:700;
-    color:#0E1C36;
+.upload-btn:hover {
+    background: var(--gold);
+    color: var(--navy-800);
 }
 
-.document-preview p{
-    margin:0;
-    font-size:12.5px;
-    color:#64748B;
+.upload-btn input[type="file"] {
+    display: none;
 }
 
-/* --- Responsive --- */
-@media (max-width:768px){
-
-    .content-card{
-        margin:12px;
-        padding:20px 16px;
+@media (max-width: 768px) {
+    .checklist-item {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
     }
-
-    .upload-card{
-        padding:16px;
+    .checklist-action {
+        width: 100%;
+        margin-top: 12px;
     }
-
-    .btn-upload,
-    .btn{
-        width:100%;
+    .upload-btn {
+        width: 100%;
+        justify-content: center;
     }
 }

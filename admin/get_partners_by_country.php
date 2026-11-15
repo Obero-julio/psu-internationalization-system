@@ -1,6 +1,5 @@
-<?php
-declare(strict_types=1);
 
+<?php
 ini_set('display_errors', '0');
 error_reporting(E_ALL);
 ini_set('log_errors', '1');
@@ -14,57 +13,55 @@ require_once __DIR__ . '/../config/db.php';
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 
-/* =========================
-   RESPONSE HELPER
-========================= */
 function respond(int $status, bool $success, string $message, $data = null): void
 {
     http_response_code($status);
+
     echo json_encode([
         'status'  => $status,
         'success' => $success,
         'message' => $message,
-        'data'    => $data,
+        'data'    => $data
     ], JSON_UNESCAPED_UNICODE);
+
     exit();
 }
 
-/* =========================
-   AUTH
-========================= */
+// AUTH
 if (!isset($_SESSION['user_id'])) {
     respond(401, false, 'Unauthorized. Please log in.');
 }
 
-/* =========================
-   METHOD GUARD
-========================= */
+// METHOD
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     respond(405, false, 'Method not allowed.');
 }
 
-/* =========================
-   INPUT
-========================= */
+// INPUT
 $countryId = filter_input(INPUT_GET, 'country_id', FILTER_VALIDATE_INT);
+
 if ($countryId === false || $countryId === null || $countryId < 1) {
     respond(422, false, 'Invalid country_id.');
 }
 
-/* =========================
-   HANDLE
-========================= */
 try {
     $pdo = db();
 
-    /* Country existence check — distinguishes "no partners" from "bad country" */
-    $chk = $pdo->prepare("SELECT 1 FROM countries WHERE id = ? LIMIT 1");
+    // Check selected country
+    $chk = $pdo->prepare("
+        SELECT id
+        FROM countries_addresses
+        WHERE id = ?
+        LIMIT 1
+    ");
+
     $chk->execute([$countryId]);
+
     if (!$chk->fetchColumn()) {
         respond(404, false, 'Country not found.');
     }
 
-    /* Case-insensitive status match (handles 'Active' or 'active') */
+    // Fetch partner institutions
     $stmt = $pdo->prepare("
         SELECT id, institution_name
         FROM partners
@@ -72,16 +69,25 @@ try {
           AND LOWER(status) = 'active'
         ORDER BY institution_name ASC
     ");
+
     $stmt->execute([$countryId]);
+
     $partners = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    respond(200, true, 'OK', $partners);
+    respond(
+        200,
+        true,
+        empty($partners) ? 'No partners in this country.' : 'Partners fetched successfully.',
+        $partners
+    );
 
 } catch (PDOException $e) {
-    error_log('partners_by_country.php (PDO): ' . $e->getMessage());
-    respond(500, false, 'A database error occurred. Please try again.');
+    error_log('get_partners_by_country.php: ' . $e->getMessage());
+
+    respond(500, false, 'Database error occurred.');
 
 } catch (Throwable $e) {
-    error_log('partners_by_country.php: ' . $e->getMessage());
-    respond(500, false, 'An unexpected error occurred.');
+    error_log('get_partners_by_country.php: ' . $e->getMessage());
+
+    respond(500, false, 'Unexpected error occurred.');
 }

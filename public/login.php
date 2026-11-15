@@ -91,82 +91,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([':email' => $username]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($user && password_verify($password, $user['password_hash'])) {
+if ($user && password_verify($password, $user['password_hash'])) {
 
-            // Successful login — reset throttling
-            $_SESSION['login_attempts']     = 0;
-            $_SESSION['login_locked_until'] = 0;
+    $role = strtolower(trim($user['user_role'] ?? ''));
 
-            session_regenerate_id(true);
-
-            $_SESSION['user_id']    = $user['id'];
-            $_SESSION['username']   = $user['email'];
-            $_SESSION['first_name'] = $user['first_name'];
-            $_SESSION['user_role']  = $user['user_role'];
-
-            // Re-issue CSRF token after privilege change
-            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-
-            if ($remember) {
-                setcookie('remember_email', $username, [
-                    'expires'  => time() + (60 * 60 * 24 * 30),
-                    'path'     => '/',
-                    'domain'   => '',
-                    'secure'   => true,
-                    'httponly' => true,
-                    'samesite' => 'Lax',
-                ]);
-            } else {
-                setcookie('remember_email', '', [
-                    'expires'  => time() - 3600,
-                    'path'     => '/',
-                    'secure'   => true,
-                    'httponly' => true,
-                    'samesite' => 'Lax',
-                ]);
-            }
-
-            $role = strtolower(trim($user['user_role'] ?? ''));
-            if ($role === '') {
-                $role = 'applicant';
-            }
-
-            if (in_array($role, ['admin', 'ad', 'super admin', 'sa'], true)) {
-
-                json_response([
-                    'success'  => true,
-                    'redirect' => '../admin/dashboard.php'
-                ]);
-
-            } elseif (in_array($role, ['user', 'applicant'], true)) {
-
-                json_response([
-                    'success'  => true,
-                    'redirect' => '../user/home.php'
-                ]);
-
-            } else {
-
-                json_response([
-                    'success' => false,
-                    'error'   => 'Invalid account role.'
-                ]);
-            }
-
-        } else {
-
-            // Failed login — count toward lockout
-            $_SESSION['login_attempts']++;
-            if ($_SESSION['login_attempts'] >= MAX_ATTEMPTS) {
-                $_SESSION['login_locked_until'] = time() + LOCKOUT_SECONDS;
-                $_SESSION['login_attempts'] = 0;
-            }
-
-            json_response([
-                'success' => false,
-                'error'   => 'Invalid email or password.'
-            ]);
+    // -------- ONLY ADMIN / SUPER ADMIN MAY USE THIS PORTAL --------
+    if (!in_array($role, ['admin', 'ad', 'super admin', 'sa'], true)) {
+        // Do NOT create a session. Do NOT set remember cookie.
+        // Reuse the failed-attempt counter so credential guessing
+        // against this page is still throttled.
+        $_SESSION['login_attempts']++;
+        if ($_SESSION['login_attempts'] >= MAX_ATTEMPTS) {
+            $_SESSION['login_locked_until'] = time() + LOCKOUT_SECONDS;
+            $_SESSION['login_attempts'] = 0;
         }
+
+        // Generic error — do not reveal that the account exists
+        // or that it belongs to a non-admin user.
+        json_response([
+            'success' => false,
+            'error'   => 'Invalid email or password.'
+        ]);
+    }
+
+    // -------- SUCCESS: admin authenticated --------
+    $_SESSION['login_attempts']     = 0;
+    $_SESSION['login_locked_until'] = 0;
+
+    session_regenerate_id(true);
+
+    $_SESSION['user_id']        = $user['id'];
+    $_SESSION['username']       = $user['email'];
+    $_SESSION['first_name']     = $user['first_name'];
+    $_SESSION['user_role']      = $user['user_role'];
+    $_SESSION['_admin_portal']  = true;   // marker used by dashboard guard
+
+    // Re-issue CSRF token after privilege change
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+
+    $isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+
+    if ($remember) {
+        setcookie('remember_email', $username, [
+            'expires'  => time() + (60 * 60 * 24 * 30),
+            'path'     => '/',
+            'secure'   => $isHttps,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    } else {
+        setcookie('remember_email', '', [
+            'expires'  => time() - 3600,
+            'path'     => '/',
+            'secure'   => $isHttps,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    }
+
+    json_response([
+        'success'  => true,
+        'redirect' => '../admin/dashboard.php'
+    ]);
+
+} else {
+    // Failed login — count toward lockout
+    $_SESSION['login_attempts']++;
+    if ($_SESSION['login_attempts'] >= MAX_ATTEMPTS) {
+        $_SESSION['login_locked_until'] = time() + LOCKOUT_SECONDS;
+        $_SESSION['login_attempts'] = 0;
+    }
+
+    json_response([
+        'success' => false,
+        'error'   => 'Invalid email or password.'
+    ]);
+}
     }
 }
 

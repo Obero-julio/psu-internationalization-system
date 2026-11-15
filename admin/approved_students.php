@@ -55,32 +55,20 @@ function h($value)
 
     <div class="page-header">
         <h2>Approved Students</h2>
-        <p>
-            List of students approved for international mobility programs.
-        </p>
+        <p>List of students approved for international mobility programs.</p>
     </div>
 
     <div class="toolbar">
-
         <div class="search-wrap">
             <i class="fa fa-search"></i>
-            <input
-                type="text"
-                id="searchInput"
-                placeholder="Search student..."
-            >
+            <input type="text" id="searchInput" placeholder="Search student...">
         </div>
-
     </div>
 
     <div class="table-card">
-
         <table>
-
             <thead>
-
                 <tr>
-
                     <th>Student</th>
                     <th>Program</th>
                     <th>Partner Institution</th>
@@ -89,41 +77,49 @@ function h($value)
                     <th>School Year</th>
                     <th>Approved Date</th>
                     <th>Status</th>
-
                 </tr>
-
             </thead>
 
             <tbody id="tableBody">
-
             <?php if($students): ?>
-
                 <?php foreach($students as $row): ?>
+                
+                <?php
+                    // Generate initials for the avatar
+                    $initials = '';
+                    $parts = explode(' ', trim($row['student_name'] ?? ''));
+                    foreach ($parts as $p) {
+                        if ($p !== '') $initials .= strtoupper(substr($p, 0, 1));
+                        if (strlen($initials) >= 2) break;
+                    }
+                ?>
 
-                <tr
-                    data-search="<?= strtolower(
-                        $row['student_name'].
-                        ' '.$row['program_name'].
-                        ' '.$row['institution_name']
-                    ) ?>"
-                >
-
-                    <td><?= h($row['student_name']) ?></td>
+                <tr data-search="<?= strtolower($row['student_name'].' '.$row['program_name'].' '.$row['institution_name']) ?>">
+                    
+                    <!-- Student Cell with Avatar -->
+                    <td>
+                        <div class="student-cell">
+                            <div class="student-avatar"><?= h($initials ?: '?') ?></div>
+                            <div class="student-info">
+                                <strong><?= h($row['student_name']) ?></strong>
+                            </div>
+                        </div>
+                    </td>
 
                     <td><?= h($row['program_name']) ?></td>
-
                     <td><?= h($row['institution_name']) ?></td>
-
-                    <td><?= h($row['mobility_type']) ?></td>
+                    
+                    <td>
+                        <span class="mobility-badge">
+                            <i class="fa-solid fa-plane"></i> <?= h($row['mobility_type']) ?>
+                        </span>
+                    </td>
 
                     <td><?= h($row['semester']) ?></td>
-
                     <td><?= h($row['school_year']) ?></td>
 
                     <td>
-                        <?= !empty($row['approval_date'])
-                            ? date("M d, Y", strtotime($row['approval_date']))
-                            : '-' ?>
+                        <?= !empty($row['approval_date']) ? date("M d, Y", strtotime($row['approval_date'])) : '—' ?>
                     </td>
 
                     <td>
@@ -131,51 +127,30 @@ function h($value)
                             <?= ucfirst($row['status']) ?>
                         </span>
                     </td>
-
                 </tr>
-
                 <?php endforeach; ?>
-
             <?php else: ?>
-
                 <tr>
-
-                    <td colspan="8" class="empty-row">
+                    <td colspan="8" class="empty-row" style="text-align:center; padding:40px; color:#94a3b8;">
                         No approved students found.
                     </td>
-
                 </tr>
-
             <?php endif; ?>
-
             </tbody>
-
         </table>
 
         <div class="pagination">
-
-            Showing <?= count($students) ?> approved student(s)
-
+            <span>Showing <?= count($students) ?> approved student(s)</span>
         </div>
-
     </div>
-
 </div>
 
 <script>
-
 document.getElementById("searchInput").addEventListener("input",function(){
-
     const keyword=this.value.toLowerCase();
-
     document.querySelectorAll("#tableBody tr").forEach(function(row){
-
         const text=row.dataset.search || "";
-
         row.style.display=text.includes(keyword) ? "" : "none";
-
     });
-
 });
-
 </script>

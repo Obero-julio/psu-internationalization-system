@@ -1,137 +1,119 @@
 <?php
 require_once __DIR__ . '/../config/db.php';
+if (session_status() === PHP_SESSION_NONE) session_start();
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-if (!isset($_SESSION['user_id'])) {
-    header("Location: ../public/login.php");
-    exit();
+$user_id = $_SESSION['user_id'] ?? null;
+if (!$user_id) {
+    header('Location: ../public/login.php');
+    exit;
 }
 
 $pdo = db();
-$user_id = $_SESSION['user_id'];
+$message = '';
+$msgType = '';
 
-$success = '';
-$error = '';
+// Handle File Upload
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['document'])) {
+    $req_id = (int)($_POST['requirement_id'] ?? 0);
+    $file = $_FILES['document'];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-
-    if (!isset($_FILES['document']) || $_FILES['document']['error'] !== 0) {
-        $error = "Please select a valid file.";
-    } else {
-
-        $file = $_FILES['document'];
-
-        // =========================
-        // FILE SIZE LIMIT (5MB)
-        // =========================
-        $maxSize = 5 * 1024 * 1024;
-        if ($file['size'] > $maxSize) {
-            $error = "File is too large. Maximum 5MB allowed.";
+    if ($file['error'] === UPLOAD_ERR_OK) {
+        $allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+        if (!in_array($file['type'], $allowedTypes)) {
+            $message = 'Invalid file type. Only PDF, JPG, and PNG are allowed.';
+            $msgType = 'error';
         } else {
+            $uploadDir = __DIR__ . '/../uploads/';
+            if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
 
-            // =========================
-            // SECURE MIME CHECK
-            // =========================
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $mime = finfo_file($finfo, $file['tmp_name']);
-            finfo_close($finfo);
+            $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
+            $filename = uniqid('doc_' . $user_id . '_') . '.' . $ext;
+            $filepath = $uploadDir . $filename;
 
-            $allowedTypes = [
-                'application/pdf',
-                'application/msword',
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'image/jpeg',
-                'image/png'
-            ];
-
-            if (!in_array($mime, $allowedTypes)) {
-                $error = "Invalid file type.";
+            if (move_uploaded_file($file['tmp_name'], $filepath)) {
+                // Save to database (Assuming you have a user_documents table)
+                $stmt = $pdo->prepare("
+                    INSERT INTO user_documents (user_id, requirement_id, file_path, uploaded_at) 
+                    VALUES (?, ?, ?, NOW())
+                ");
+                $stmt->execute([$user_id, $req_id, 'uploads/' . $filename]);
+                
+                $message = 'Document uploaded successfully!';
+                $msgType = 'success';
             } else {
-
-                // =========================
-                // UPLOAD DIRECTORY
-                // =========================
-                $uploadDir = __DIR__ . '/../uploads/documents/';
-
-                if (!is_dir($uploadDir)) {
-                    mkdir($uploadDir, 0777, true);
-                }
-
-                // =========================
-                // FILE NAME (SAFE)
-                // =========================
-                $fileName = time() . '_' . bin2hex(random_bytes(5)) . '_' . basename($file['name']);
-                $filePath = $uploadDir . $fileName;
-
-                // =========================
-                // MOVE FILE
-                // =========================
-                if (move_uploaded_file($file['tmp_name'], $filePath)) {
-
-                    // =========================
-                    // INSERT INTO DATABASE
-                    // =========================
-                    $stmt = $pdo->prepare("
-                        INSERT INTO documents
-                        (user_id, title, file_type, file_path, status, created_at)
-                        VALUES (?, ?, ?, ?, 'pending', NOW())
-                    ");
-
-                    $stmt->execute([
-                        $user_id,
-                        pathinfo($file['name'], PATHINFO_FILENAME),
-                        pathinfo($file['name'], PATHINFO_EXTENSION),
-                        'uploads/documents/' . $fileName
-                    ]);
-
-                    $success = "Document uploaded successfully.";
-
-                } else {
-                    $error = "Upload failed. Try again.";
-                }
+                $message = 'Failed to move uploaded file.';
+                $msgType = 'error';
             }
         }
+    } else {
+        $message = 'Please select a valid file to upload.';
+        $msgType = 'error';
     }
 }
+
+// Fetch global requirements
+$requirements = $pdo->query("SELECT * FROM program_requirements ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+// Fetch what the user has already uploaded
+$stmt = $pdo->prepare("SELECT requirement_id, file_path FROM user_documents WHERE user_id = ?");
+$stmt->execute([$user_id]);
+$uploadedDocs = $stmt->fetchAll(PDO::FETCH_KEY_PAIR); // Returns [requirement_id => file_path]
 ?>
 
 <link rel="stylesheet" href="../asset/css/upload_docs.css">
 
 <div class="content-card">
-
     <div class="page-header">
+        <div class="page-header-icon">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+        </div>
         <div>
             <h2>Upload Documents</h2>
-            <p>Submit required files for your application.</p>
+            <p>Manage and submit the required documents for your application.</p>
         </div>
     </div>
 
-    <?php if ($success): ?>
-        <div class="alert-success"><?= htmlspecialchars($success) ?></div>
+    <?php if ($message): ?>
+        <div class="alert alert-<?= $msgType ?>">
+            <i class="fa-solid <?= $msgType === 'success' ? 'fa-circle-check' : 'fa-triangle-exclamation' ?>"></i>
+            <?= htmlspecialchars($message) ?>
+        </div>
     <?php endif; ?>
 
-    <?php if ($error): ?>
-        <div class="alert-error"><?= htmlspecialchars($error) ?></div>
-    <?php endif; ?>
+    <div class="checklist-wrapper">
+        <h3>Application Checklist</h3>
+        <p class="checklist-desc">Please upload clear copies of the following documents (PDF, JPG, or PNG).</p>
 
-    <div class="upload-card">
+        <div class="checklist-grid">
+            <?php foreach ($requirements as $req): 
+                $isUploaded = isset($uploadedDocs[$req['id']]);
+            ?>
+                <div class="checklist-item <?= $isUploaded ? 'completed' : '' ?>">
+                    <div class="checklist-icon">
+                        <i class="fa-solid <?= $isUploaded ? 'fa-circle-check' : 'fa-circle-notch' ?>"></i>
+                    </div>
+                    
+                    <div class="checklist-info">
+<strong><?= htmlspecialchars($req['requirement_name'] ?? $req['name'] ?? $req['title'] ?? $req['label'] ?? 'Unnamed Requirement') ?></strong>                        <small><?= htmlspecialchars($req['description'] ?? 'No description provided.') ?></small>
+                        
+                        <?php if ($isUploaded): ?>
+                            <a href="../<?= htmlspecialchars($uploadedDocs[$req['id']]) ?>" target="_blank" class="view-file">
+                                <i class="fa-solid fa-eye"></i> View Uploaded File
+                            </a>
+                        <?php endif; ?>
+                    </div>
 
-        <form method="POST" enctype="multipart/form-data" class="upload-form">
-
-            <div class="form-group">
-                <label>Select Document</label>
-                <input type="file" name="document" required>
-            </div>
-
-            <button type="submit" class="btn-upload">
-                Upload Document
-            </button>
-
-        </form>
-
+                    <div class="checklist-action">
+                        <form method="POST" enctype="multipart/form-data">
+                            <input type="hidden" name="requirement_id" value="<?= $req['id'] ?>">
+                            <label class="upload-btn">
+                                <i class="fa-solid fa-upload"></i> 
+                                <?= $isUploaded ? 'Replace' : 'Upload' ?>
+                                <input type="file" name="document" accept=".pdf,.jpg,.jpeg,.png" onchange="this.form.submit()" required>
+                            </label>
+                        </form>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
     </div>
-
 </div>

@@ -18,13 +18,17 @@ function h($value)
 }
 
 /* FETCH NOTIFICATIONS */
+
+/* FETCH NOTIFICATIONS */
 $stmt = $pdo->prepare("
     SELECT
         a.id,
         a.status,
-        a.program,
+        p.program_name AS program,
         a.created_at
     FROM applications a
+    LEFT JOIN programs p
+        ON p.id = a.program_id
     WHERE a.applicant_id = ?
       AND a.status IN ('approved', 'rejected')
     ORDER BY a.created_at DESC
@@ -33,6 +37,7 @@ $stmt = $pdo->prepare("
 
 $stmt->execute([$_SESSION['user_id']]);
 $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
 
 /* SESSION READ TRACKING */
 if (!isset($_SESSION['read_notifications'])) {

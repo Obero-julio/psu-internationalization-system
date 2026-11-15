@@ -1,36 +1,79 @@
 <?php
+
 require_once __DIR__ . '/../config/db.php';
 
-if (session_status() === PHP_SESSION_NONE) { session_start(); }
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['user_id'])) {
-    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
-    exit();
-}
-
 try {
-    $pdo  = db();
-    $stmt = $pdo->prepare("
-        SELECT id FROM applications
-        WHERE applicant_id = ?
-          AND status IN ('approved', 'rejected')
-    ");
-    $stmt->execute([$_SESSION['user_id']]);
-    $ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-    if (!isset($_SESSION['read_notifications'])) {
-        $_SESSION['read_notifications'] = [];
+    /* =========================
+       CHECK LOGIN
+    ========================= */
+
+    if (!isset($_SESSION['user_id'])) {
+        http_response_code(401);
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'You are not logged in.'
+        ]);
+
+        exit;
     }
 
-    $before  = count(array_diff($ids, $_SESSION['read_notifications']));
-    $_SESSION['read_notifications'] = array_values(array_unique(
-        array_merge($_SESSION['read_notifications'], $ids)
-    ));
 
-    echo json_encode(['success' => true, 'updated' => $before]);
+    /* =========================
+       DATABASE
+    ========================= */
+
+    $pdo = db();
+
+    $userId = (int) $_SESSION['user_id'];
+
+
+    /* =========================
+       MARK ALL AS READ
+    ========================= */
+
+    $stmt = $pdo->prepare("
+        UPDATE notifications
+        SET is_read = 1
+        WHERE user_id = ?
+          AND is_read = 0
+    ");
+
+    $stmt->execute([$userId]);
+
+
+    /* =========================
+       RESPONSE
+    ========================= */
+
+    echo json_encode([
+        'success' => true,
+        'message' => 'All notifications marked as read.',
+        'updated' => $stmt->rowCount()
+    ]);
 
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'message' => 'Database error']);
+
+    http_response_code(500);
+
+    echo json_encode([
+        'success' => false,
+        'message' => 'Database error occurred.'
+    ]);
+
+} catch (Throwable $e) {
+
+    http_response_code(500);
+
+    echo json_encode([
+        'success' => false,
+        'message' => 'An unexpected error occurred.'
+    ]);
 }

@@ -1,9 +1,3 @@
-/* ===================================================
-   PSU × IZN — Country & Address Management
-   Add / Edit / Delete / Toggle Status via fetch, CSRF-protected
-   Search filter + toast notifications
-   =================================================== */
-
 document.addEventListener("DOMContentLoaded", () => {
   /* ---- Config ---- */
   const csrfToken = window.COUNTRIES_CSRF;
@@ -13,7 +7,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const addBtn = document.getElementById("btnAddCountry");
   const tableBody = document.getElementById("countriesBody");
   const searchInput = document.getElementById("searchInput");
-  const paginationText = document.getElementById("paginationText");
+  
+  // Safe lookup for the pagination text span
+  const paginationSpan = document.querySelector(".pagination span");
 
   const form = document.getElementById("countryForm");
   const formAction = document.getElementById("formAction");
@@ -21,9 +17,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const submitLabel = document.getElementById("formSubmitLabel");
 
   const countryInput = document.getElementById("country_name");
-  const regionInput = document.getElementById('region');
-  const provinceInput = document.getElementById('province');
+  const regionInput = document.getElementById("region");
+  const provinceInput = document.getElementById("province");
   const cityInput = document.getElementById("city");
+  const postalInput = document.getElementById("postal_code");
   const addressInput = document.getElementById("address");
 
   const modal = document.getElementById("countryModal");
@@ -92,7 +89,9 @@ document.addEventListener("DOMContentLoaded", () => {
       regionInput.value = editBtn.dataset.region || "";
       provinceInput.value = editBtn.dataset.province || "";
       cityInput.value = editBtn.dataset.city || "";
+      postalInput.value = editBtn.dataset.postal || "";
       addressInput.value = editBtn.dataset.address || "";
+
       modalTitle.textContent = "Edit Country / Address";
       modalSubtitle.textContent = "Update existing record";
       modalIcon.className = "fa-solid fa-pen";
@@ -129,7 +128,16 @@ document.addEventListener("DOMContentLoaded", () => {
         headers: { "X-Requested-With": "XMLHttpRequest" },
         body,
       });
-      const data = await res.json();
+      
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.error("PHP Error Output:", text);
+        showToast("Server returned invalid format.", "error");
+        return;
+      }
 
       if (!data.ok) {
         showToast(data.error || "Could not update status.", "error");
@@ -162,7 +170,16 @@ document.addEventListener("DOMContentLoaded", () => {
         headers: { "X-Requested-With": "XMLHttpRequest" },
         body,
       });
-      const data = await res.json();
+      
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.error("PHP Error Output:", text);
+        showToast("Server error. Check console.", "error");
+        return;
+      }
 
       if (!data.ok) {
         showToast(data.error || "Something went wrong.", "error");
@@ -181,9 +198,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   /* ---- Confirm delete ---- */
-  document
-    .getElementById("deleteConfirm")
-    .addEventListener("click", async () => {
+  document.getElementById("deleteConfirm").addEventListener("click", async () => {
       if (!deleteId) return;
 
       const confirmBtn = document.getElementById("deleteConfirm");
@@ -203,12 +218,11 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         const text = await res.text();
-        console.log("DELETE RESPONSE:", text); // ← shows exactly what PHP returned
-
         let data;
         try {
           data = JSON.parse(text);
         } catch {
+          console.error("PHP Error Output:", text);
           showToast("Server returned invalid response.", "error");
           return;
         }
@@ -259,8 +273,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (match) count++;
     });
 
-    paginationText.textContent = term
-      ? `Showing ${count} matching countr${count === 1 ? "y" : "ies"}`
-      : `Showing ${count} countr${count === 1 ? "y" : "ies"}`;
+    if (paginationSpan) {
+      paginationSpan.textContent = term
+        ? `Showing ${count} matching countr${count === 1 ? "y" : "ies"}`
+        : `Showing ${count} countr${count === 1 ? "y" : "ies"}`;
+    }
   });
 });

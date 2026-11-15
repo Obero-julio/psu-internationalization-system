@@ -1,254 +1,150 @@
 <?php
 session_start();
-require_once __DIR__ . '/../config/auth_middleware.php';
+require_once __DIR__ . '/../config/db.php';
 
-requireApplicant();
-
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-if (!isset($_SESSION['user_id'])) {
-    header('Location: ../user/user_login.php');
+if (empty($_SESSION['user_id'])) {
+    header('Location: ../index.php?page=login');
     exit();
 }
 
-/* PAGE ROUTING */
-$page = trim((string)($_GET['page'] ?? 'home'));
+$role = strtolower(trim($_SESSION['user_role'] ?? ''));
+if (in_array($role, ['admin', 'super admin'], true)) {
+    // Admin session should never land in the user portal
+    session_unset();
+    session_destroy();
+    header('Location: ../admin/dashboard.php'); // or ../index.php?page=login
+    exit();
+}
+
+$page = trim((string) ($_GET['page'] ?? 'home'));
+
 $validPages = [
-    'home',
-
-    // Programs
-    'available_programs',
-
-    // Applications
-    'apply_program',
-    'my_applications',
-
-    // Documents
-    'upload_documents',
-
-    // Forms
-    'online_forms',
-    'download_forms',
-    'submitted_forms',
-
-    // Mobility
-    'travel_info',
-    'activity_reports',
-
-    // Communication
-    'notifications',
-
-    // Profile
-    'profile',
-    'change_password',
-    'delete_account'
+    'home', 'available_programs', 'apply_program', 'my_applications',
+    'reports', 'upload_documents', 'download_forms', 'submitted_forms',
+    'travel_info', 'activity_reports', 'notifications', 'profile',
+    'change_password', 'delete_account',
+    'announcements', 'mobility_schedule' // <-- ADD THESE
 ];
 
-if (!in_array($page, $validPages, true)) { $page = 'home'; }
+if (!in_array($page, $validPages, true)) {
+    $page = 'home';
+}
 
-$firstName = $_SESSION['first_name'] ?? 'User';
+$userId    = (int) $_SESSION['user_id'];
+$firstName = (string) ($_SESSION['first_name'] ?? 'Applicant');
+$initial   = strtoupper(substr($firstName, 0, 1));
+
+// Unread notification count
+$unreadCount = 0;
+try {
+    $stmt = db()->prepare('SELECT COUNT(*) FROM notifications WHERE user_id = :uid AND is_read = 0');
+    $stmt->execute([':uid' => $userId]);
+    $unreadCount = (int) $stmt->fetchColumn();
+} catch (PDOException $e) {
+    error_log('[home] unread count: ' . $e->getMessage());
+}
 ?>
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Applicant Portal — PSUxIZN</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Applicant Portal | PSU Internationalization</title>
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-<link rel="stylesheet" href="../asset/css/home.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    
+    <!-- Core Layout -->
+    <link rel="stylesheet" href="../asset/css/home.css">
+    <!-- Page Specific Styles -->
+    <link rel="stylesheet" href="../asset/css/user_dashboard.css">
+    <link rel="stylesheet" href="../asset/css/reports.css">
 </head>
 <body>
 
-<div class="layout">
+<div class="portal-shell">
 
-  <!-- ===================== SIDEBAR ===================== -->
-<aside class="sidebar">
+    <?php include 'ap_sidebar.php'; ?>
 
-  <div class="sidebar-header">
-    <img src="../asset/img/psu_logo.png" width="44" alt="PSU Logo">
-    <div>
-      <div class="logo-title">PSUxIZN</div>
-      <div class="logo-subtitle">Applicant Portal</div>
-    </div>
-  </div>
+    <!-- MAIN -->
+    <main class="main-content">
+        <header class="topbar">
+            <button class="mobile-menu" type="button" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">
+                <i class="fa-solid fa-bars"></i>
+            </button>
 
-<nav class="sidebar-nav">
+            <div class="topbar-spacer"></div>
 
-<a href="?page=home" class="<?= $page==='home'?'active':'' ?>">
-    <i class="fa-solid fa-house"></i>
-    Home
-</a>
+            <div class="topbar-actions">
+                <button class="icon-button notification-button" type="button" aria-label="Notifications" onclick="window.location.href='?page=notifications'">
+                    <i class="fa-regular fa-bell"></i>
+                    <?php if ($unreadCount > 0): ?><span><?= $unreadCount ?></span><?php endif; ?>
+                </button>
 
-<div class="nav-title">Programs</div>
+                <div class="account-menu">
+                    <button class="account-trigger" type="button" aria-expanded="false" aria-haspopup="true">
+                        <div class="account-avatar"><?= htmlspecialchars($initial) ?></div>
+                        <div>
+                            <b><?= htmlspecialchars($firstName) ?></b>
+                            <small>Applicant</small>
+                        </div>
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </button>
 
-<a href="?page=available_programs" class="<?= $page==='available_programs'?'active':'' ?>">
-    <i class="fa-solid fa-book-open"></i>
-    Available Programs
-</a>
-
-<a href="?page=apply_program" class="<?= $page==='apply_program'?'active':'' ?>">
-    <i class="fa-solid fa-file-circle-plus"></i>
-    Apply for a Program
-</a>
-
-<div class="nav-title">Applications</div>
-
-<a href="?page=my_applications" class="<?= $page==='my_applications'?'active':'' ?>">
-    <i class="fa-solid fa-folder-open"></i>
-    My Applications
-</a>
-
-<div class="nav-title">Documents</div>
-
-<a href="?page=upload_documents" class="<?= $page==='upload_documents'?'active':'' ?>">
-    <i class="fa-solid fa-upload"></i>
-    Upload Documents
-</a>
-
-<div class="nav-title">Forms</div>
-
-<a href="?page=online_forms" class="<?= $page==='online_forms'?'active':'' ?>">
-    <i class="fa-solid fa-pen-to-square"></i>
-    Fill-Up Forms
-</a>
-
-<a href="?page=download_forms" class="<?= $page==='download_forms'?'active':'' ?>">
-    <i class="fa-solid fa-download"></i>
-    Download Forms
-</a>
-
-<a href="?page=submitted_forms" class="<?= $page==='submitted_forms'?'active':'' ?>">
-    <i class="fa-solid fa-check-circle"></i>
-    Submitted Forms
-</a>
-
-<div class="nav-title">Mobility</div>
-
-<a href="?page=travel_info" class="<?= $page==='travel_info'?'active':'' ?>">
-    <i class="fa-solid fa-passport"></i>
-    Travel Information
-</a>
-
-<a href="?page=activity_reports" class="<?= $page==='activity_reports'?'active':'' ?>">
-    <i class="fa-solid fa-chart-line"></i>
-    Activity Reports
-</a>
-
-<a href="?page=notifications" class="<?= $page==='notifications'?'active':'' ?>">
-    <i class="fa-solid fa-bell"></i>
-    Notifications
-</a>
-
-<div class="nav-title">Account</div>
-
-<a href="?page=profile" class="<?= $page==='profile'?'active':'' ?>">
-    <i class="fa-solid fa-user"></i>
-    Profile
-</a>
-
-<a href="?page=change_password" class="<?= $page==='change_password'?'active':'' ?>">
-    <i class="fa-solid fa-key"></i>
-    Change Password
-</a>
-
-<a href="?page=delete_account" class="<?= $page==='delete_account'?'active danger':'' ?>">
-    <i class="fa-solid fa-trash"></i>
-    Delete Account
-</a>
-
-<a href="../public/user_logout.php" class="danger">
-    <i class="fa-solid fa-right-from-bracket"></i>
-    Logout
-</a>
-
-</nav>
-</aside>
-
-  <!-- ===================== MAIN ===================== -->
-  <div class="main">
-
-    <!-- TOPBAR -->
-    <div class="topbar">
-      <div class="topbar-left">
-        <div class="topbar-title">Applicant Portal</div>
-        <div class="topbar-sub">PSU Internationalization</div>
-      </div>
-
-        <div class="topbar-right">
-            <div class="user-info">
-                <div class="account-avatar">
-                    <?= strtoupper(substr($firstName,0,1)) ?>
-                </div>
-
-                <div>
-                    <div class="account-name">
-                        <?= htmlspecialchars($firstName) ?>
-                    </div>
-                    <div class="account-role">
-                        Applicant
+                    <div class="account-dropdown">
+                        <div class="account-dropdown-header">
+                            <b><?= htmlspecialchars($firstName) ?></b>
+                            <small>Applicant Account</small>
+                        </div>
+                        <a href="?page=profile"><i class="fa-regular fa-user"></i><span>Profile</span></a>
+                        <a href="?page=change_password"><i class="fa-solid fa-key"></i><span>Change Password</span></a>
+                        <a href="?page=delete_account" class="danger"><i class="fa-regular fa-trash-can"></i><span>Delete Account</span></a>
+                        <div class="dropdown-divider"></div>
+                        <a class="logout" href="../public/user_logout.php"><i class="fa-solid fa-arrow-right-from-bracket"></i><span>Log out</span></a>
                     </div>
                 </div>
             </div>
-        </div>
+        </header>
 
-          <div class="dropdown">
-            <div class="dropdown-header">
-              <div class="dh-name"><?= htmlspecialchars($firstName) ?></div>
-              <div class="dh-email">Applicant Account</div>
-            </div>
-            <a href="?page=change_password">
-              <i class="fa-solid fa-key"></i> Change Password
-            </a>
-            <div class="dropdown-divider"></div>
-            <a href="?page=delete_account" class="danger"
-              onclick="return confirm('Permanently delete your account?')">
-              <i class="fa-solid fa-trash"></i> Delete Account
-            </a>
-            <div class="dropdown-divider"></div>
-            <a href="../public/user_logout.php" class="danger">
-              <i class="fa-solid fa-right-from-bracket"></i> Logout
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
+        <?php
+        $pageFiles = [
+            'home'                => 'dashboard.php',
+            'reports'             => 'reports.php',
+            'available_programs'  => 'available_programs.php',
+            'apply_program'       => 'apply_program.php',
+            'my_applications'     => 'my_applications.php',
+            'upload_documents'    => 'upload_documents.php',
+            'download_forms'      => 'download_forms.php',
+            'submitted_forms'     => 'submitted_forms.php',
+            'travel_info'         => 'travel_information.php',
+            'activity_reports'    => 'activity_reports.php',
+            'notifications'       => 'user_notifications.php',
+            'profile'             => 'profile.php',
+            'change_password'     => 'change_password.php',
+            'delete_account'      => 'delete_account.php',
+            'announcements'       => 'announcements.php',
+            'mobility_schedule'   => 'mobility_sched.php',
+        ];
 
-    <!-- PAGE CONTENT -->
-    <?php if ($page === 'home'): ?>
+        $file = __DIR__ . '/' . $pageFiles[$page];
 
-    <?php elseif ($page === 'apply_program'): ?>
-      <div class="box"><?php include __DIR__ . '/apply_program.php'; ?></div>
-    <?php elseif ($page === 'my_applications'): ?>
-      <div class="box"><?php include __DIR__ . '/my_applications.php'; ?></div>
-    <?php elseif ($page === 'upload_documents'): ?>
-      <div class="box"><?php include __DIR__ . '/upload_documents.php'; ?></div>
-    <?php elseif ($page === 'online_forms'): ?>
-    <div class="box"><?php include __DIR__ . '/online_forms.php'; ?></div>
-    <?php elseif ($page === 'download_forms'): ?>
-      <div class="box"><?php include __DIR__ . '/download_forms.php'; ?></div>
-    <?php elseif ($page === 'submitted_forms'): ?>
-      <div class="box"><?php include __DIR__ . '/submitted_forms.php'; ?></div>
-    <?php elseif ($page === 'travel_info'): ?>
-      <div class="box"><?php include __DIR__ . '/travel_information.php'; ?></div>
-    <?php elseif ($page === 'activity_reports'): ?>
-      <div class="box"><?php include __DIR__ . '/activity_reports.php'; ?></div>
-    <?php elseif ($page === 'notifications'): ?>
-      <div class="box"><?php include __DIR__ . '/user_notifications.php'; ?></div>
-      <?php elseif ($page === 'available_programs'): ?>
-      <div class="box"><?php include __DIR__ . '/available_programs.php'; ?></div>
-    <?php elseif ($page === 'profile'): ?>
-      <div class="box"><?php include __DIR__ . '/profile.php'; ?></div>
-    <?php elseif ($page === 'change_password'): ?>
-      <div class="box"><?php include __DIR__ . '/change_password.php'; ?></div>
-    <?php elseif ($page === 'delete_account'): ?>
-      <div class="box"><?php include __DIR__ . '/delete_account.php'; ?></div>
-    <?php endif; ?>
-  </div><!-- /main -->
-</div><!-- /layout -->
+        if (!is_file($file)) {
+            http_response_code(404);
+            echo '<div class="page-box">';
+            echo '<h2>Page not found</h2>';
+            echo '<p>This module is not available yet.</p>';
+            echo '</div>';
+        } elseif ($page === 'home') {
+            include $file;
+        } else {
+            echo '<div class="page-box">';
+            include $file;
+            echo '</div>';
+        }
+        ?>
+    </main>
+</div>
 
 <script src="../asset/js/home.js"></script>
 </body>

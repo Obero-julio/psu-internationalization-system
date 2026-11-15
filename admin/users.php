@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -37,7 +37,6 @@ if (!function_exists('h')) {
     }
 }
 
-/* Helper: initials from a full name */
 function initials(string $name): string {
     $parts = preg_split('/\s+/', trim($name));
     $out = '';
@@ -136,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user_create'])) {
                 $createSuccess = true;
                 $_SESSION['csrf'] = bin2hex(random_bytes(32));
             } catch (PDOException $e) {
-                $createErrors[] = 'Database error. Please try again or contact the administrator.';
+                $createErrors[] = 'Database error. Please try again.';
                 error_log('users.php create error: ' . $e->getMessage());
             }
         }
@@ -237,6 +236,7 @@ $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $stmt->execute();
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
+
 <link rel="stylesheet" href="../asset/css/users.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
@@ -292,7 +292,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <td>
                             <div class="user-name-cell">
                                 <div class="user-avatar"><?= h(initials($fullname)) ?></div>
-                                <span><?= h($fullname) ?></span>
+                                <span style="font-weight:600; color:#0f172a;"><?= h($fullname) ?></span>
                             </div>
                         </td>
                         <td>
@@ -378,13 +378,9 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </div>
 </div>
 
-
-<!-- =====================================================================
-     CREATE USER MODAL
-====================================================================== -->
+<!-- CREATE USER MODAL -->
 <div id="createModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="createModalTitle">
     <div class="modal-box">
-
         <div class="modal-header">
             <div>
                 <h3 id="createModalTitle">Add Account</h3>
@@ -396,7 +392,6 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
 
         <div class="modal-body">
-
             <?php if (!empty($createErrors)): ?>
                 <div class="error-box">
                     <?php foreach ($createErrors as $err): ?>
@@ -425,25 +420,18 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
                 <div class="form-section-title">Personal Details</div>
                 <div class="form-grid">
-
                     <div class="form-group col-5">
                         <label>First Name <span class="required">*</span></label>
-                        <input type="text" name="first_name" required
-                               value="<?= h($_POST['first_name'] ?? '') ?>">
+                        <input type="text" name="first_name" required value="<?= h($_POST['first_name'] ?? '') ?>">
                     </div>
-
                     <div class="form-group col-2">
                         <label>M.I.</label>
-                        <input type="text" name="middle_name" maxlength="5" placeholder="-"
-                               value="<?= h($_POST['middle_name'] ?? '') ?>">
+                        <input type="text" name="middle_name" maxlength="5" placeholder="-" value="<?= h($_POST['middle_name'] ?? '') ?>">
                     </div>
-
                     <div class="form-group col-5">
                         <label>Last Name <span class="required">*</span></label>
-                        <input type="text" name="last_name" required
-                               value="<?= h($_POST['last_name'] ?? '') ?>">
+                        <input type="text" name="last_name" required value="<?= h($_POST['last_name'] ?? '') ?>">
                     </div>
-
                     <div class="form-group col-4">
                         <label>Extension</label>
                         <select name="extension_name">
@@ -458,13 +446,10 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <?php endforeach; ?>
                         </select>
                     </div>
-
                     <div class="form-group col-4">
                         <label>Birthdate</label>
-                        <input type="date" name="birthdate"
-                               value="<?= h($_POST['birthdate'] ?? '') ?>">
+                        <input type="date" name="birthdate" value="<?= h($_POST['birthdate'] ?? '') ?>">
                     </div>
-
                     <div class="form-group col-4">
                         <label>System Role <span class="required">*</span></label>
                         <select name="role" id="roleSelect" required>
@@ -479,7 +464,6 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <?php endforeach; ?>
                         </select>
                     </div>
-
                     <div class="form-group col-6" id="programField">
                         <label>Program <span class="required">*</span></label>
                         <select name="program" id="programSelect">
@@ -496,18 +480,14 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         </select>
                         <p class="form-instructions">Required for applicant accounts.</p>
                     </div>
-
                     <div class="form-group col-6">
                         <label>Contact Number</label>
-                        <input type="text" name="contact"
-                               value="<?= h($_POST['contact'] ?? '') ?>">
+                        <input type="text" name="contact" value="<?= h($_POST['contact'] ?? '') ?>">
                     </div>
-
                 </div>
 
                 <div class="form-section-title">Account Email</div>
                 <div class="form-grid">
-
                     <div class="form-group col-12">
                         <label>Generated Email Preview</label>
                         <input type="text" id="emailPreview" readonly placeholder="Fill in name and role to preview">
@@ -516,7 +496,6 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             A temporary password will be created and shown once after the account is added.
                         </p>
                     </div>
-
                 </div>
 
                 <div class="form-actions">
@@ -526,18 +505,13 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     </button>
                 </div>
             </form>
-
         </div>
     </div>
 </div>
 
-
-<!-- =====================================================================
-     EDIT USER MODAL
-====================================================================== -->
+<!-- EDIT USER MODAL -->
 <div id="editModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
     <div class="modal-box">
-
         <div class="modal-header">
             <div>
                 <h3 id="editModalTitle">Edit User</h3>
@@ -555,7 +529,6 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
 
         <div class="modal-body">
-
             <?php if (!empty($editErrors)): ?>
                 <div class="error-box">
                     <?php foreach ($editErrors as $err): ?>
@@ -584,25 +557,18 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
                 <div class="form-section-title">Personal Details</div>
                 <div class="form-grid">
-
                     <div class="form-group col-5">
                         <label>First Name <span class="required">*</span></label>
-                        <input type="text" name="edit_first_name" required
-                               value="<?= $ev('edit_first_name', 'first_name') ?>">
+                        <input type="text" name="edit_first_name" required value="<?= $ev('edit_first_name', 'first_name') ?>">
                     </div>
-
                     <div class="form-group col-2">
                         <label>M.I.</label>
-                        <input type="text" name="edit_middle_name" maxlength="5" placeholder="-"
-                               value="<?= $ev('edit_middle_name', 'middle_name') ?>">
+                        <input type="text" name="edit_middle_name" maxlength="5" placeholder="-" value="<?= $ev('edit_middle_name', 'middle_name') ?>">
                     </div>
-
                     <div class="form-group col-5">
                         <label>Last Name <span class="required">*</span></label>
-                        <input type="text" name="edit_last_name" required
-                               value="<?= $ev('edit_last_name', 'last_name') ?>">
+                        <input type="text" name="edit_last_name" required value="<?= $ev('edit_last_name', 'last_name') ?>">
                     </div>
-
                     <div class="form-group col-4">
                         <label>Extension</label>
                         <select name="edit_extension_name">
@@ -617,7 +583,6 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <?php endforeach; ?>
                         </select>
                     </div>
-
                     <div class="form-group col-4">
                         <label>System Role <span class="required">*</span></label>
                         <select name="edit_role" required>
@@ -632,7 +597,6 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <?php endforeach; ?>
                         </select>
                     </div>
-
                     <div class="form-group col-4">
                         <label>Account Status <span class="required">*</span></label>
                         <select name="edit_status" required>
@@ -647,24 +611,18 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <?php endforeach; ?>
                         </select>
                     </div>
-
                 </div>
 
                 <div class="form-section-title">Security & Credentials</div>
                 <div class="form-grid">
-
                     <div class="form-group col-6">
                         <label>Email Address <span class="required">*</span></label>
-                        <input type="email" name="edit_email" required
-                               value="<?= $ev('edit_email', 'email') ?>">
+                        <input type="email" name="edit_email" required value="<?= $ev('edit_email', 'email') ?>">
                     </div>
-
                     <div class="form-group col-6">
                         <label>New Password</label>
-                        <input type="password" name="edit_password"
-                               placeholder="Leave blank to keep existing">
+                        <input type="password" name="edit_password" placeholder="Leave blank to keep existing">
                     </div>
-
                     <div class="form-group col-12">
                         <p class="form-instructions">
                             Required fields are marked with <span class="required">*</span>.
@@ -675,7 +633,6 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <?php endif; ?>
                         </p>
                     </div>
-
                 </div>
 
                 <div class="form-actions">
@@ -685,16 +642,12 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     </button>
                 </div>
             </form>
-
         </div>
     </div>
 </div>
 
-
 <script>
 (function () {
-
-    /* ── Table filter ── */
     var searchInput = document.getElementById('searchInput');
     var roleFilter  = document.getElementById('roleFilter');
 
@@ -714,7 +667,6 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
     searchInput.addEventListener('input',  filterTable);
     roleFilter.addEventListener('change',  filterTable);
 
-    /* ── Modal helpers ── */
     function openModal(modal)  { modal.classList.add('open');    document.body.style.overflow = 'hidden'; }
     function closeModal(modal) { modal.classList.remove('open'); document.body.style.overflow = ''; }
 
@@ -750,7 +702,6 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
         });
     });
 
-    /* ── Email preview (create form) ── */
     function generateEmailPreview() {
         var fEl = document.querySelector('#createUserForm [name="first_name"]');
         var lEl = document.querySelector('#createUserForm [name="last_name"]');
@@ -792,6 +743,5 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     generateEmailPreview();
     toggleProgram();
-
 })();
 </script>

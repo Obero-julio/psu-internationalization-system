@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/../config/db.php';
 
 $pdo = db();
@@ -13,26 +13,18 @@ if (!function_exists('h')) {
     }
 }
 
-/**
- * Build a display-friendly full name from first/MI/last parts.
- * e.g. ("Juan", "D", "Santos") -> "Juan D. Santos"
- */
 function formatContactName(?string $first, ?string $mi, ?string $last): string {
     $first = trim((string)$first);
     $mi    = trim((string)$mi);
     $last  = trim((string)$last);
-
     $parts = [];
     if ($first !== '') $parts[] = $first;
     if ($mi !== '')    $parts[] = strtoupper($mi) . '.';
     if ($last !== '')  $parts[] = $last;
-
     return $parts ? implode(' ', $parts) : 'N/A';
 }
 
-/* =========================
-   SAFE DELETE
-========================= */
+/* SAFE DELETE */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
     $id = (int) $_POST['delete_id'];
     $pdo->prepare("DELETE FROM partners WHERE id = ?")->execute([$id]);
@@ -40,11 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
     exit();
 }
 
-$totalPartners = (int)$pdo->query("
-    SELECT COUNT(*)
-    FROM partners
-")->fetchColumn();
-
+$totalPartners = (int)$pdo->query("SELECT COUNT(*) FROM partners")->fetchColumn();
 $totalPages = max(1, ceil($totalPartners / $limit));
 
 $countryStmt = $pdo->query("
@@ -55,34 +43,21 @@ $countryStmt = $pdo->query("
 ");
 $countries = $countryStmt->fetchAll(PDO::FETCH_ASSOC);
 
-/* =========================
-   FETCH PARTNERS
-========================= */
+/* FETCH PARTNERS */
 $stmt = $pdo->prepare("
 SELECT
-    p.id,
-    p.institution_name,
-    c.country_name,
-    p.contact_first_name,
-    p.contact_middle_name,
-    p.contact_last_name,
-    p.contact_email,
-    a.agreement_name,
-    p.expiry_date,
-    p.status
+    p.id, p.institution_name, c.country_name,
+    p.contact_first_name, p.contact_middle_name, p.contact_last_name, p.contact_email,
+    a.agreement_name, p.expiry_date, p.status, p.notes
 FROM partners p
-LEFT JOIN countries c
-    ON p.country_id = c.id
-LEFT JOIN agreement_types a
-    ON p.agreement_type_id = a.id
+LEFT JOIN countries c ON p.country_id = c.id
+LEFT JOIN agreement_types a ON p.agreement_type_id = a.id
 ORDER BY p.id DESC
 LIMIT :limit OFFSET :offset
 ");
-
 $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $stmt->execute();
-
 $partners = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $agreementTypes = $pdo->query("
@@ -92,7 +67,6 @@ $agreementTypes = $pdo->query("
     ORDER BY agreement_name
 ")->fetchAll(PDO::FETCH_ASSOC);
 
-/* Helper: expiry date status class */
 function expiryClass(?string $date): string {
     if (empty($date)) return '';
     $timestamp = strtotime($date);
@@ -108,7 +82,6 @@ function expiryClass(?string $date): string {
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 
 <div class="content">
-
     <div class="page-header">
         <h2>Partner Institution Management</h2>
         <p>Manage international partner database, MOA/MOU agreements, collaboration records, and institutional profiles.</p>
@@ -119,7 +92,7 @@ function expiryClass(?string $date): string {
             <i class="fa fa-search"></i>
             <input type="text" id="searchInput" placeholder="Search institutions...">
         </div>
-        <button class="create-btn" onclick="openAddModal()">
+        <button type="button" class="create-btn" id="btnAddPartner">
             <i class="fa fa-plus"></i> Add Partner
         </button>
     </div>
@@ -152,6 +125,7 @@ function expiryClass(?string $date): string {
                     );
                     $status = strtolower($partner['status'] ?? 'active');
                     $expClass = expiryClass($partner['expiry_date'] ?? null);
+                    $jsonData = htmlspecialchars(json_encode($partner), ENT_QUOTES, 'UTF-8');
                 ?>
                 <tr data-name="<?= h($searchData) ?>">
                     <td>
@@ -176,9 +150,7 @@ function expiryClass(?string $date): string {
                     <td><?= h($partner['agreement_name'] ?: 'N/A') ?></td>
                     <td>
                         <span class="expiry-cell <?= $expClass ?>">
-                            <?= !empty($partner['expiry_date'])
-                                ? date('M d, Y', strtotime($partner['expiry_date']))
-                                : 'N/A' ?>
+                            <?= !empty($partner['expiry_date']) ? date('M d, Y', strtotime($partner['expiry_date'])) : 'N/A' ?>
                         </span>
                     </td>
                     <td>
@@ -188,15 +160,13 @@ function expiryClass(?string $date): string {
                     </td>
                     <td>
                         <div class="actions">
-                            <a href="view_partner.php?id=<?= $partner['id'] ?>" class="action-btn view-btn" title="View">
+                            <button type="button" class="action-btn view-btn" title="View" data-partner='<?= $jsonData ?>'>
                                 <i class="fa fa-eye"></i>
-                            </a>
-                            <button type="button" class="action-btn edit-btn" title="Edit"
-                                    onclick="openEditModal(<?= (int)$partner['id'] ?>)">
+                            </button>
+                            <button type="button" class="action-btn edit-btn" title="Edit" data-partner='<?= $jsonData ?>'>
                                 <i class="fa fa-pen"></i>
                             </button>
-                            <form method="POST" style="display:inline;"
-                                  onsubmit="return confirm('Delete this partner?');">
+                            <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this partner?');">
                                 <input type="hidden" name="delete_id" value="<?= (int)$partner['id'] ?>">
                                 <button type="submit" class="action-btn delete-btn" title="Delete">
                                     <i class="fa fa-trash"></i>
@@ -224,492 +194,255 @@ function expiryClass(?string $date): string {
             </tbody>
         </table>
 
-    <!-- PAGINATION -->
         <div class="pagination">
-            <span id="paginationInfo">
-                Showing <?= count($partners) ?> of <?= $totalPartners ?> partners
-            </span>
+            <span id="paginationInfo">Showing <?= count($partners) ?> of <?= $totalPartners ?> partners</span>
             <div class="pages">
-                <?php
-                    $baseQ = array_merge($_GET, []);
-                    unset($baseQ['p']);
-                ?>
+                <?php $baseQ = array_merge($_GET, []); unset($baseQ['p']); ?>
                 <?php if ($page > 1): ?>
-                    <a class="page-arrow" href="?<?= h(http_build_query(array_merge($baseQ, ['p' => $page - 1]))) ?>">
-                        <i class="fa fa-angle-left"></i>
-                    </a>
+                    <a class="page-arrow" href="?<?= h(http_build_query(array_merge($baseQ, ['p' => $page - 1]))) ?>"><i class="fa fa-angle-left"></i></a>
                 <?php else: ?>
                     <button class="page-arrow" disabled><i class="fa fa-angle-left"></i></button>
                 <?php endif; ?>
 
                 <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                    <a href="?<?= h(http_build_query(array_merge($baseQ, ['p' => $i]))) ?>"
-                    class="<?= $i === $page ? 'active' : '' ?>">
-                        <?= $i ?>
-                    </a>
+                    <a href="?<?= h(http_build_query(array_merge($baseQ, ['p' => $i]))) ?>" class="<?= $i === $page ? 'active' : '' ?>"><?= $i ?></a>
                 <?php endfor; ?>
 
                 <?php if ($page < $totalPages): ?>
-                    <a class="page-arrow" href="?<?= h(http_build_query(array_merge($baseQ, ['p' => $page + 1]))) ?>">
-                        <i class="fa fa-angle-right"></i>
-                    </a>
+                    <a class="page-arrow" href="?<?= h(http_build_query(array_merge($baseQ, ['p' => $page + 1]))) ?>"><i class="fa fa-angle-right"></i></a>
                 <?php else: ?>
                     <button class="page-arrow" disabled><i class="fa fa-angle-right"></i></button>
                 <?php endif; ?>
             </div>
         </div>
     </div>
-
 </div>
 
-<!-- =====================================================================
-     ADD PARTNER MODAL
-====================================================================== -->
-<div id="addModal" class="modal-overlay" onclick="closeModalOutside(event,'addModal')">
+<!-- ===================== ADD MODAL ===================== -->
+<div id="addModal" class="modal-overlay">
     <div class="modal-box">
-
         <div class="modal-header">
             <div class="modal-header-left">
-                <div class="modal-icon">
-                    <i class="fa fa-handshake"></i>
-                </div>
+                <div class="modal-icon"><i class="fa fa-handshake"></i></div>
                 <div>
                     <h3>Add Partner Institution</h3>
                     <p class="modal-subtitle">Register a new international partner.</p>
                 </div>
             </div>
-            <button class="modal-close" onclick="closeModal('addModal')">
-                <i class="fa fa-times"></i>
-            </button>
+            <button class="modal-close" data-close="addModal"><i class="fa fa-times"></i></button>
         </div>
 
         <form id="addForm">
             <div class="modal-body">
-
-                <!-- Country + Institution -->
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">
-                            <i class="fa fa-globe"></i> Country *
-                        </label>
+                        <label class="form-label"><i class="fa fa-globe"></i> Country *</label>
                         <select name="country_id" id="addCountrySelect" class="form-input" required>
                             <option value="">Select Country</option>
                             <?php foreach ($countries as $country): ?>
-                                <option value="<?= (int)$country['id'] ?>">
-                                    <?= h($country['country_name']) ?>
-                                </option>
+                                <option value="<?= (int)$country['id'] ?>"><?= h($country['country_name']) ?></option>
                             <?php endforeach; ?>
                             <option value="__other__">Other (enter manually)</option>
                         </select>
-                        <input type="text" name="country_manual" id="addCountryManual"
-                               class="form-input" placeholder="Enter country name"
-                               style="display:none;margin-top:8px">
+                        <input type="text" name="country_manual" id="addCountryManual" class="form-input" placeholder="Enter country name" style="display:none;margin-top:8px">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">
-                            <i class="fa fa-building"></i> Institution Name *
-                        </label>
-                        <input type="text" name="institution_name" id="addInstitution"
-                               class="form-input" placeholder="Enter Institution Name" required>
+                        <label class="form-label"><i class="fa fa-building"></i> Institution Name *</label>
+                        <input type="text" name="institution_name" class="form-input" placeholder="Enter Institution Name" required>
                     </div>
                 </div>
 
-                <!-- Agreement Type + Status -->
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">
-                            <i class="fa fa-file-contract"></i> Agreement Type
-                        </label>
+                        <label class="form-label"><i class="fa fa-file-contract"></i> Agreement Type</label>
                         <select name="agreement_type" class="form-input">
                             <option value="">Select Agreement Type</option>
                             <?php foreach ($agreementTypes as $type): ?>
-                                <option value="<?= h($type['agreement_name']) ?>">
-                                    <?= h($type['agreement_name']) ?>
-                                </option>
+                                <option value="<?= h($type['agreement_name']) ?>"><?= h($type['agreement_name']) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">
-                            <i class="fa fa-circle-dot"></i> Status
-                        </label>
+                        <label class="form-label"><i class="fa fa-circle-dot"></i> Status</label>
                         <select name="status" class="form-input" required>
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                            <option value="expired">Expired</option>
-                            <option value="pending">Pending</option>
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
                         </select>
                     </div>
                 </div>
 
-                <!-- Contact Person: First Name / M.I. / Last Name -->
                 <div class="form-group">
-                    <label class="form-label">
-                        <i class="fa fa-user"></i> Contact Person
-                    </label>
+                    <label class="form-label"><i class="fa fa-user"></i> Contact Person</label>
                     <div class="form-row" style="grid-template-columns: 1fr 70px 1fr;">
-                        <input type="text" name="contact_first_name" class="form-input"
-                               placeholder="First name" required maxlength="100">
-                        <input type="text" name="contact_mi" class="form-input"
-                               placeholder="M.I." maxlength="1" pattern="[A-Za-z]"
-                               title="Single letter only" style="text-align:center;">
-                        <input type="text" name="contact_last_name" class="form-input"
-                               placeholder="Last name" required maxlength="100">
+                        <input type="text" name="contact_first_name" class="form-input" placeholder="First name" required maxlength="100">
+                        <input type="text" name="contact_mi" class="form-input" placeholder="M.I." maxlength="1" style="text-align:center;">
+                        <input type="text" name="contact_last_name" class="form-input" placeholder="Last name" required maxlength="100">
                     </div>
                 </div>
 
-                <!-- Contact Email -->
                 <div class="form-group">
-                    <label class="form-label">
-                        <i class="fa fa-envelope"></i> Contact Email
-                    </label>
-                    <input type="email" name="contact_email" class="form-input"
-                           placeholder="e.g. jsmith@univ.edu">
+                    <label class="form-label"><i class="fa fa-envelope"></i> Contact Email</label>
+                    <input type="email" name="contact_email" class="form-input" placeholder="e.g. jsmith@univ.edu">
                 </div>
 
-                <!-- Expiry Date -->
                 <div class="form-group">
-                    <label class="form-label">
-                        <i class="fa fa-calendar-xmark"></i> Expiry Date
-                    </label>
+                    <label class="form-label"><i class="fa fa-calendar-xmark"></i> Expiry Date</label>
                     <input type="date" name="expiry_date" class="form-input">
                 </div>
 
-                <!-- Notes -->
                 <div class="form-group">
-                    <label class="form-label">
-                        <i class="fa fa-note-sticky"></i> Notes
-                    </label>
-                    <textarea name="notes" class="form-input"
-                              placeholder="Any additional notes about this partner..."></textarea>
+                    <label class="form-label"><i class="fa fa-note-sticky"></i> Notes</label>
+                    <textarea name="notes" class="form-input" placeholder="Any additional notes..."></textarea>
                 </div>
-
             </div>
-
             <div class="modal-footer">
-                <button type="button" class="btn-secondary" onclick="closeModal('addModal')">
-                    Cancel
-                </button>
-                <button type="submit" class="btn-confirm">
-                    <i class="fa fa-floppy-disk"></i> Save Partner
-                </button>
+                <button type="button" class="btn-secondary" data-close="addModal">Cancel</button>
+                <button type="submit" class="btn-confirm"><i class="fa fa-floppy-disk"></i> Save Partner</button>
             </div>
         </form>
-
     </div>
 </div>
 
-<!-- =====================================================================
-     EDIT PARTNER MODAL
-====================================================================== -->
-<div id="editModal" class="modal-overlay" onclick="closeModalOutside(event,'editModal')">
+<!-- ===================== EDIT MODAL ===================== -->
+<div id="editModal" class="modal-overlay">
     <div class="modal-box">
-
         <div class="modal-header">
             <div class="modal-header-left">
-                <div class="modal-icon">
-                    <i class="fa fa-pen-to-square"></i>
-                </div>
+                <div class="modal-icon"><i class="fa fa-pen-to-square"></i></div>
                 <div>
                     <h3>Edit Partner Institution</h3>
                     <p class="modal-subtitle" id="editModalSubtitle">Update partner record details.</p>
                 </div>
             </div>
-            <button class="modal-close" onclick="closeModal('editModal')">
-                <i class="fa fa-times"></i>
-            </button>
+            <button class="modal-close" data-close="editModal"><i class="fa fa-times"></i></button>
         </div>
 
-        <!-- Loading state -->
-        <div id="editLoading" class="modal-body" style="display:flex;align-items:center;justify-content:center;min-height:200px;">
-            <i class="fa fa-spinner fa-spin" style="font-size:24px;color:#94a3b8"></i>
-        </div>
-
-        <form id="editForm" style="display:none;">
+        <form id="editForm">
             <input type="hidden" name="edit_id" id="editId">
-
             <div class="modal-body">
-
-                <!-- Country + Institution -->
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">
-                            <i class="fa fa-globe"></i> Country *
-                        </label>
+                        <label class="form-label"><i class="fa fa-globe"></i> Country *</label>
                         <select id="editCountry" name="country_id" class="form-input" required>
                             <option value="">Select Country</option>
                             <?php foreach ($countries as $country): ?>
-                                <option value="<?= (int)$country['id'] ?>">
-                                    <?= h($country['country_name']) ?>
-                                </option>
+                                <option value="<?= (int)$country['id'] ?>"><?= h($country['country_name']) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">
-                            <i class="fa fa-building"></i> Institution Name *
-                        </label>
-                        <input type="text" id="editInstitution" name="institution_name"
-                               class="form-input" placeholder="Enter Institution Name" required>
+                        <label class="form-label"><i class="fa fa-building"></i> Institution Name *</label>
+                        <input type="text" id="editInstitution" name="institution_name" class="form-input" placeholder="Enter Institution Name" required>
                     </div>
                 </div>
 
-                <!-- Agreement Type + Status -->
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">
-                            <i class="fa fa-file-contract"></i> Agreement Type
-                        </label>
+                        <label class="form-label"><i class="fa fa-file-contract"></i> Agreement Type</label>
                         <select name="agreement_type" id="editAgreement" class="form-input">
                             <option value="">Select Agreement Type</option>
                             <?php foreach ($agreementTypes as $type): ?>
-                                <option value="<?= h($type['agreement_name']) ?>">
-                                    <?= h($type['agreement_name']) ?>
-                                </option>
+                                <option value="<?= h($type['agreement_name']) ?>"><?= h($type['agreement_name']) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">
-                            <i class="fa fa-circle-dot"></i> Status
-                        </label>
+                        <label class="form-label"><i class="fa fa-circle-dot"></i> Status</label>
                         <select name="status" id="editStatus" class="form-input" required>
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                            <option value="expired">Expired</option>
-                            <option value="pending">Pending</option>
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
                         </select>
                     </div>
                 </div>
 
-                <!-- Contact Person: First Name / M.I. / Last Name -->
                 <div class="form-group">
-                    <label class="form-label">
-                        <i class="fa fa-user"></i> Contact Person
-                    </label>
+                    <label class="form-label"><i class="fa fa-user"></i> Contact Person</label>
                     <div class="form-row" style="grid-template-columns: 1fr 70px 1fr;">
-                        <input type="text" name="contact_first_name" id="editContactFirst"
-                               class="form-input" placeholder="First name" required maxlength="100">
-                        <input type="text" name="contact_mi" id="editContactMi"
-                               class="form-input" placeholder="M.I." maxlength="1"
-                               pattern="[A-Za-z]" title="Single letter only" style="text-align:center;">
-                        <input type="text" name="contact_last_name" id="editContactLast"
-                               class="form-input" placeholder="Last name" required maxlength="100">
+                        <input type="text" name="contact_first_name" id="editContactFirst" class="form-input" placeholder="First name" required maxlength="100">
+                        <input type="text" name="contact_mi" id="editContactMi" class="form-input" placeholder="M.I." maxlength="1" style="text-align:center;">
+                        <input type="text" name="contact_last_name" id="editContactLast" class="form-input" placeholder="Last name" required maxlength="100">
                     </div>
                 </div>
 
-                <!-- Contact Email -->
                 <div class="form-group">
-                    <label class="form-label">
-                        <i class="fa fa-envelope"></i> Contact Email
-                    </label>
-                    <input type="email" name="contact_email" id="editEmail"
-                           class="form-input" placeholder="e.g. jsmith@univ.edu">
+                    <label class="form-label"><i class="fa fa-envelope"></i> Contact Email</label>
+                    <input type="email" name="contact_email" id="editEmail" class="form-input" placeholder="e.g. jsmith@univ.edu">
                 </div>
 
-                <!-- Expiry Date -->
                 <div class="form-group">
-                    <label class="form-label">
-                        <i class="fa fa-calendar-xmark"></i> Expiry Date
-                    </label>
+                    <label class="form-label"><i class="fa fa-calendar-xmark"></i> Expiry Date</label>
                     <input type="date" name="expiry_date" id="editExpiry" class="form-input">
                 </div>
 
-                <!-- Notes -->
                 <div class="form-group">
-                    <label class="form-label">
-                        <i class="fa fa-note-sticky"></i> Notes
-                    </label>
-                    <textarea name="notes" id="editNotes" class="form-input"
-                              placeholder="Any additional notes..."></textarea>
+                    <label class="form-label"><i class="fa fa-note-sticky"></i> Notes</label>
+                    <textarea name="notes" id="editNotes" class="form-input" placeholder="Any additional notes..."></textarea>
                 </div>
-
             </div>
-
             <div class="modal-footer">
-                <button type="button" class="btn-secondary" onclick="closeModal('editModal')">
-                    Cancel
-                </button>
-                <button type="submit" class="btn-confirm">
-                    <i class="fa fa-floppy-disk"></i> Update Partner
-                </button>
+                <button type="button" class="btn-secondary" data-close="editModal">Cancel</button>
+                <button type="submit" class="btn-confirm"><i class="fa fa-floppy-disk"></i> Update Partner</button>
             </div>
         </form>
-
     </div>
 </div>
 
-<script>
-/* ── Search ── */
-document.getElementById('searchInput').addEventListener('input', function () {
-    const search  = this.value.toLowerCase().trim();
-    const rows    = document.querySelectorAll('#tableBody tr[data-name]');
-    let   visible = 0;
+<!-- ===================== VIEW MODAL ===================== -->
+<div id="viewModal" class="modal-overlay">
+    <div class="modal-box" style="max-width: 600px;">
+        <div class="modal-header">
+            <div class="modal-header-left">
+                <div class="modal-icon" style="background: #e0f2fe; color: #0284c7;"><i class="fa fa-eye"></i></div>
+                <div>
+                    <h3>Partner Details</h3>
+                    <p class="modal-subtitle">Full information for this partner.</p>
+                </div>
+            </div>
+            <button class="modal-close" data-close="viewModal"><i class="fa fa-times"></i></button>
+        </div>
 
-    rows.forEach(row => {
-        const text = (row.dataset.name || '').toLowerCase();
-        const show = !search || text.includes(search);
-        row.style.display = show ? '' : 'none';
-        if (show) visible++;
-    });
+        <div class="modal-body" style="padding: 24px;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <small style="color:var(--gray-500); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Institution</small>
+                    <p id="viewInstitution" style="font-size:1.1rem; font-weight:600; margin-top:4px; color:var(--navy);"></p>
+                </div>
+                <div>
+                    <small style="color:var(--gray-500); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Country</small>
+                    <p id="viewCountry" style="font-size:1.1rem; font-weight:600; margin-top:4px; color:var(--navy);"></p>
+                </div>
+                <div>
+                    <small style="color:var(--gray-500); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Agreement Type</small>
+                    <p id="viewAgreement" style="margin-top:4px;"></p>
+                </div>
+                <div>
+                    <small style="color:var(--gray-500); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Status</small>
+                    <p id="viewStatus" style="margin-top:4px;"></p>
+                </div>
+                <div>
+                    <small style="color:var(--gray-500); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Expiry Date</small>
+                    <p id="viewExpiry" style="margin-top:4px;"></p>
+                </div>
+            </div>
 
-    const info = document.getElementById('paginationInfo');
-    if (info) {
-        info.innerText = `Showing ${visible} partner(s)`;
-    }
-});
+            <hr style="border:0; border-top:1px solid var(--gray-200); margin: 20px 0;">
 
-/* ── Modal helpers ── */
-function openModal(id) {
-    document.getElementById(id).classList.add('open');
-    document.body.style.overflow = 'hidden';
-}
+            <div>
+                <small style="color:var(--gray-500); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Contact Person</small>
+                <p id="viewContactName" style="font-weight:600; margin-top:4px;"></p>
+                <p id="viewContactEmail" style="color:var(--gray-500); font-size:0.9rem;"></p>
+            </div>
 
-function closeModal(id) {
-    document.getElementById(id).classList.remove('open');
-    document.body.style.overflow = '';
-}
+            <div style="margin-top: 20px;">
+                <small style="color:var(--gray-500); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Notes</small>
+                <p id="viewNotes" style="margin-top:4px; color:var(--gray-700); line-height:1.6;"></p>
+            </div>
+        </div>
+        
+        <div class="modal-footer">
+            <button type="button" class="btn-secondary" data-close="viewModal">Close</button>
+        </div>
+    </div>
+</div>
 
-function closeModalOutside(e, id) {
-    if (e.target.id === id) closeModal(id);
-}
-
-document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') {
-        closeModal('addModal');
-        closeModal('editModal');
-    }
-});
-
-/* ── ADD modal ── */
-function openAddModal() {
-    document.getElementById('addForm').reset();
-    document.getElementById('addCountryManual').style.display = 'none';
-    document.getElementById('addCountryManual').required = false;
-    openModal('addModal');
-}
-
-/* Country select -> show manual entry when "Other" is chosen */
-document.getElementById('addCountrySelect').addEventListener('change', function () {
-    const manual = document.getElementById('addCountryManual');
-    const isOther = this.value === '__other__';
-    manual.style.display = isOther ? '' : 'none';
-    manual.required = isOther;
-});
-
-/* ADD form submit */
-document.getElementById('addForm').addEventListener('submit', function (e) {
-    e.preventDefault();
-    submitForm(this, '/Internalization_management/admin/add_partner.php', 'addModal');
-});
-
-/* ── EDIT modal ── */
-function openEditModal(id) {
-    document.getElementById('editLoading').style.display = 'flex';
-    document.getElementById('editForm').style.display    = 'none';
-    document.getElementById('editModalSubtitle').textContent = 'Loading partner data...';
-    openModal('editModal');
-
-    fetch(`/Internalization_management/admin/get_partner.php?id=${id}`)
-        .then(res => res.json())
-        .then(data => {
-            if (!data || data.error) {
-                showToast('error', (data && data.error) || 'Failed to load partner data.');
-                closeModal('editModal');
-                return;
-            }
-
-            document.getElementById('editId').value             = data.id;
-            document.getElementById('editInstitution').value    = data.institution_name  || '';
-            document.getElementById('editCountry').value      = data.country_id         || data.country           || '';
-            document.getElementById('editContactFirst').value = data.contact_first_name || '';
-            document.getElementById('editContactMi').value     = data.contact_mi        || '';
-            document.getElementById('editContactLast').value  = data.contact_last_name || '';
-            document.getElementById('editEmail').value         = data.contact_email     || '';
-            document.getElementById('editExpiry').value       = data.expiry_date       || '';
-            document.getElementById('editNotes').value         = data.notes             || '';
-
-            setSelectValue('editAgreement', data.agreement_type || '');
-            setSelectValue('editStatus',    (data.status || 'active').toLowerCase());
-
-            document.getElementById('editModalSubtitle').textContent =
-                `Editing: ${data.institution_name}`;
-
-            document.getElementById('editLoading').style.display = 'none';
-            document.getElementById('editForm').style.display    = '';
-        })
-        .catch(() => {
-            showToast('error', 'Could not reach the server.');
-            closeModal('editModal');
-        });
-}
-
-function setSelectValue(id, value) {
-    const el = document.getElementById(id);
-    for (let i = 0; i < el.options.length; i++) {
-        if (el.options[i].value.toLowerCase() === value.toLowerCase()) {
-            el.selectedIndex = i;
-            return;
-        }
-    }
-    el.selectedIndex = 0;
-}
-
-/* EDIT form submit */
-document.getElementById('editForm').addEventListener('submit', function (e) {
-    e.preventDefault();
-    submitForm(this, '/Internalization_management/admin/update_partner.php', 'editModal');
-});
-
-/* ── Shared submit handler ── */
-function submitForm(form, endpoint, modalId) {
-    const btn      = form.querySelector('[type="submit"]');
-    const original = btn.innerHTML;
-    btn.disabled   = true;
-    btn.innerHTML  = '<i class="fa fa-spinner fa-spin"></i> Saving...';
-
-    fetch(endpoint, { method: 'POST', body: new FormData(form) })
-        .then(async res => {
-            const text = await res.text();
-            try { return JSON.parse(text); }
-            catch { throw new Error('Server did not return JSON'); }
-        })
-        .then(data => {
-            showToast(data.success ? 'success' : 'error', data.message);
-            if (data.success) {
-                closeModal(modalId);
-                setTimeout(() => location.reload(), 1200);
-            }
-        })
-        .catch(err => {
-            console.error(err);
-            showToast('error', 'Something went wrong. Please try again.');
-        })
-        .finally(() => {
-            btn.disabled  = false;
-            btn.innerHTML = original;
-        });
-}
-
-/* ── Toast ── */
-function showToast(type, message) {
-    const existing = document.querySelector('.toast');
-    if (existing) existing.remove();
-
-    const toast = document.createElement('div');
-    toast.className = `toast toast--${type}`;
-    toast.innerHTML = `
-        <i class="fa fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
-        <span></span>
-    `;
-    toast.querySelector('span').textContent = message;
-
-    document.body.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add('toast--show'));
-
-    setTimeout(() => {
-        toast.classList.remove('toast--show');
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
-</script>
+<script src="../asset/js/partners.js"></script>

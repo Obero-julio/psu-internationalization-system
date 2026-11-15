@@ -1,44 +1,69 @@
 <?php
-// 1. Force errors to display so we can see the problem
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+declare(strict_types=1);
+ini_set('display_errors', '1');
 error_reporting(E_ALL);
 
-session_start();
+if (session_status() === PHP_SESSION_NONE) session_start();
+
+require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../config/db.php';
 
+$error   = '';
 $message = '';
-$error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = trim($_POST['email'] ?? '');
-    
-    if (empty($email)) {
+    $email = strtolower(trim($_POST['email'] ?? ''));
+
+    if ($email === '') {
         $error = 'Please enter your email address.';
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Invalid email format.';
     } else {
         try {
-            $pdo = db(); // Using your singleton db function
-            $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
+            $pdo = db();
+
+            // 60-second rate limit
+            $stmt = $pdo->prepare(
+                'SELECT 1 FROM password_resets
+                 WHERE email = ? AND created_at > (NOW() - INTERVAL 60 SECOND) LIMIT 1'
+            );
             $stmt->execute([$email]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if ($user) {
-                $reset_token = bin2hex(random_bytes(32));
-                $token_expiry = date('Y-m-d H:i:s', strtotime('+1 hour'));
-                
-                $update_stmt = $pdo->prepare("UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?");
-                $update_stmt->execute([$reset_token, $token_expiry, $user['id']]);
-                
-                // Debugging: Comment this out when in production
-                $reset_link = "http://" . $_SERVER['HTTP_HOST'] . "/Internalization_management/public/reset_password.php?token=" . $reset_token;
-                $message = "Reset link (for testing): " . $reset_link; 
+
+            if ($stmt->fetchColumn()) {
+                $error = 'Please wait a minute before requesting another code.';
             } else {
-                $message = 'If an account exists with that email, a reset link will be sent.';
+                $stmt = $pdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
+                $stmt->execute([$email]);
+                $userId = $stmt->fetchColumn();
+
+                // Always show the same message (no email enumeration)
+                $message = 'If that email is registered, a 6-digit code has been sent.';
+
+                if ($userId) {
+                    // Invalidate previous codes
+                    $pdo->prepare('UPDATE password_resets SET used_at = NOW()
+                                   WHERE email = ? AND used_at IS NULL')
+                        ->execute([$email]);
+
+                    $otp  = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+                    $hash = password_hash($otp, PASSWORD_DEFAULT);
+
+                    $pdo->prepare(
+                        'INSERT INTO password_resets (user_id, email, otp_hash, expires_at)
+                         VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))'
+                    )->execute([$userId, $email, $hash]);
+
+                    // Stash email so verify step knows who we're working with
+                    $_SESSION['reset_email'] = $email;
+
+                    if (!sendPasswordResetOTP($email, $otp) && !MAIL_DEBUG) {
+                        $message = 'Could not send the email right now. Please try again later.';
+                    }
+                }
             }
         } catch (PDOException $e) {
-            $error = 'Database error: ' . $e->getMessage();
+            error_log('[forgot_password] ' . $e->getMessage());
+            $error = 'Something went wrong. Please try again.';
         }
     }
 }
@@ -47,8 +72,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Forgot Password</title>
+    <title>Forgot Password · PSUxIZN</title>
     <link rel="stylesheet" href="../asset/css/login.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
     <div class="login-card">
@@ -59,9 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="wave-light"></div>
             </div>
             <div class="left-content">
-                <div class="left-logo">
-                    <img src="../asset/img/psu_logo.png" alt="PSU Logo">
-                </div>
+                <div class="left-logo"><img src="../asset/img/psu_logo.png" alt="PSU Logo"></div>
                 <div class="left-title">PSUxIZN</div>
                 <div class="left-sub">Password Recovery</div>
             </div>
@@ -70,15 +94,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="login-right">
             <div class="form-header">
                 <div class="form-title">Reset Password</div>
-                <div class="form-subtitle">Enter your email to receive a reset link</div>
+                <div class="form-subtitle">Enter your email and we'll send you a 6-digit code</div>
             </div>
 
             <?php if ($error): ?>
-                <div class="error" style="color: #d9534f; margin-bottom: 15px;"><?= htmlspecialchars($error) ?></div>
+                <div class="error" style="color:#d9534f;margin-bottom:15px;"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
-
             <?php if ($message): ?>
-                <div class="success" style="color: #5cb85c; margin-bottom: 15px;"><?= htmlspecialchars($message) ?></div>
+                <div class="success" style="color:#5cb85c;margin-bottom:15px;"><?= htmlspecialchars($message) ?></div>
             <?php endif; ?>
 
             <form method="POST">
@@ -91,12 +114,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <button type="submit" class="login-btn">
-                    Send Reset Link <i class="fa fa-arrow-right"></i>
+                    Send Code <i class="fa fa-arrow-right"></i>
                 </button>
 
-                <a href="login.php" class="back-btn">
-                    Back to Login
-                </a>
+                <a href="login.php" class="back-btn">Back to Login</a>
+            </form>
+
+            <?php if ($message): ?>
+                <p style="text-align:center;margin-top:14px;">
+                    <a href="verify_otp.php" style="color:#0b1f4a;font-weight:600;">
+                        Enter the 6-digit code →
+                    </a>
+                </p>
+            <?php endif; ?>
         </div>
     </div>
 </body>
