@@ -48,7 +48,6 @@ $unreadCount = (int)$stmt->fetchColumn();
 
 <?php if ($approved): ?>
 <div class="approval-banner">
-    <div class="banner-icon">🎉</div>
     <div class="banner-body">
         <h3>Your application was approved!</h3>
         <p><strong><?= h($approved['program_name'] ?? 'Approved program') ?></strong>
