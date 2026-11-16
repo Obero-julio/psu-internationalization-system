@@ -5,22 +5,15 @@ $pdo = db();
 
 /*
 |--------------------------------------------------------------------------
-| Fetch Approved Students
+| Fetch Approved Students (Who have submitted documents)
 |--------------------------------------------------------------------------
 */
-
 $sql = "
 SELECT
     a.id,
-
     CONCAT(
-        u.first_name,
-        ' ',
-        IF(
-            u.middle_name IS NULL OR u.middle_name='',
-            '',
-            CONCAT(LEFT(u.middle_name,1),'. ')
-        ),
+        u.first_name, ' ',
+        IF(u.middle_name IS NULL OR u.middle_name='', '', CONCAT(LEFT(u.middle_name,1),'. ')),
         u.last_name
     ) AS student_name,
     p.program_name,
