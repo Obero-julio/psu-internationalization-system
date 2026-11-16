@@ -1,9 +1,11 @@
 <?php
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/auth_middleware.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+requireAdmin();
 
 $pdo = db();
 
@@ -30,6 +32,105 @@ function checkCsrf(): void {
         echo json_encode(['ok' => false, 'message' => 'Invalid CSRF token']);
         exit();
     }
+}
+
+/* ===================================================
+   AJAX ENDPOINT (upload requirement file)
+   =================================================== */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'upload_file') {
+    header('Content-Type: application/json');
+    checkCsrf();
+
+    $programRequirementId = (int)($_POST['program_requirement_id'] ?? 0);
+    $file = $_FILES['requirement_file'] ?? null;
+
+    if ($programRequirementId <= 0 || !$file || !isset($file['error'], $file['tmp_name'], $file['size'])) {
+        echo json_encode(['ok' => false, 'message' => 'Choose a requirement and a file to upload.']);
+        exit();
+    }
+
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        $message = $file['error'] === UPLOAD_ERR_INI_SIZE || $file['error'] === UPLOAD_ERR_FORM_SIZE
+            ? 'The file exceeds the 10 MB upload limit.'
+            : 'The file could not be uploaded. Please try again.';
+        echo json_encode(['ok' => false, 'message' => $message]);
+        exit();
+    }
+
+    if ($file['size'] <= 0 || $file['size'] > 10 * 1024 * 1024 || !is_uploaded_file($file['tmp_name'])) {
+        echo json_encode(['ok' => false, 'message' => 'Choose a valid file no larger than 10 MB.']);
+        exit();
+    }
+
+    $requirementStmt = $pdo->prepare("
+        SELECT requirement_file
+        FROM program_requirements
+        WHERE id = ?
+    ");
+    $requirementStmt->execute([$programRequirementId]);
+    $oldFilePath = $requirementStmt->fetchColumn();
+
+    if ($oldFilePath === false) {
+        echo json_encode(['ok' => false, 'message' => 'The selected program requirement was not found.']);
+        exit();
+    }
+
+    $allowedMimeTypes = [
+        'application/pdf' => 'pdf',
+        'application/msword' => 'doc',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+    ];
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mimeType = $finfo->file($file['tmp_name']);
+
+    if (!isset($allowedMimeTypes[$mimeType])) {
+        echo json_encode(['ok' => false, 'message' => 'Only PDF, DOC, or DOCX files are allowed.']);
+        exit();
+    }
+
+    $uploadDirectory = __DIR__ . '/../uploads/requirement_templates';
+    if (!is_dir($uploadDirectory) && !mkdir($uploadDirectory, 0755, true) && !is_dir($uploadDirectory)) {
+        error_log('Unable to create the requirement template upload directory.');
+        echo json_encode(['ok' => false, 'message' => 'The upload location is unavailable. Please try again.']);
+        exit();
+    }
+
+    $filename = bin2hex(random_bytes(16)) . '.' . $allowedMimeTypes[$mimeType];
+    $destination = $uploadDirectory . DIRECTORY_SEPARATOR . $filename;
+    $relativePath = 'uploads/requirement_templates/' . $filename;
+
+    if (!move_uploaded_file($file['tmp_name'], $destination)) {
+        echo json_encode(['ok' => false, 'message' => 'The file could not be saved. Please try again.']);
+        exit();
+    }
+
+    try {
+        $updateStmt = $pdo->prepare("
+            UPDATE program_requirements
+            SET requirement_file = ?
+            WHERE id = ?
+        ");
+        $updateStmt->execute([$relativePath, $programRequirementId]);
+    } catch (PDOException $e) {
+        unlink($destination);
+        error_log('program_requirements.php upload error: ' . $e->getMessage());
+        echo json_encode(['ok' => false, 'message' => 'The requirement file could not be saved. Please try again.']);
+        exit();
+    }
+
+    if (
+        is_string($oldFilePath) &&
+        strpos($oldFilePath, 'uploads/requirement_templates/') === 0 &&
+        basename($oldFilePath) !== $filename
+    ) {
+        $oldFile = $uploadDirectory . DIRECTORY_SEPARATOR . basename($oldFilePath);
+        if (is_file($oldFile) && !unlink($oldFile)) {
+            error_log('Unable to remove a replaced requirement template: ' . $oldFile);
+        }
+    }
+
+    echo json_encode(['ok' => true, 'message' => 'Requirement file uploaded successfully.']);
+    exit();
 }
 
 /* ===================================================
@@ -102,6 +203,7 @@ $stmt = $pdo->prepare("
         p.program_name,
         r.requirement_name,
         pr.is_required,
+        pr.requirement_file,
         pr.created_at
     FROM program_requirements pr
     INNER JOIN programs p ON pr.program_id = p.id
@@ -141,6 +243,7 @@ $requirements = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <th>Program</th>
                     <th>Requirement</th>
                     <th>Status</th>
+                    <th>Applicant File</th>
                     <th>Created</th>
                 </tr>
             </thead>
@@ -162,12 +265,30 @@ $requirements = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 ? '<span class="badge-success">Required</span>'
                                 : '<span class="badge-secondary">Optional</span>' ?>
                         </td>
+                        <td>
+                            <?php if (!empty($row['requirement_file'])): ?>
+                                <a class="requirement-file-link" href="../<?= h($row['requirement_file']) ?>" target="_blank" rel="noopener">
+                                    <i class="fa-solid fa-eye"></i> View current file
+                                </a>
+                            <?php endif; ?>
+                            <form class="requirement-file-form" enctype="multipart/form-data">
+                                <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
+                                <input type="hidden" name="action" value="upload_file">
+                                <input type="hidden" name="program_requirement_id" value="<?= (int)$row['id'] ?>">
+                                <input class="requirement-file-input" type="file" name="requirement_file" accept=".pdf,.doc,.docx" required>
+                                <button type="submit" class="btn-file-upload">
+                                    <i class="fa-solid fa-upload"></i>
+                                    <?= empty($row['requirement_file']) ? 'Upload file' : 'Replace file' ?>
+                                </button>
+                                <small>PDF, DOC, or DOCX (max 10 MB)</small>
+                            </form>
+                        </td>
                         <td><?= date('M d, Y', strtotime($row['created_at'])) ?></td>
                     </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr class="empty-row">
-                        <td colspan="4">No requirements assigned to any program yet.</td>
+                        <td colspan="5">No requirements assigned to any program yet.</td>
                     </tr>
                 <?php endif; ?>
             </tbody>
@@ -344,6 +465,35 @@ document.getElementById('addForm').addEventListener('submit', function (e) {
         .finally(() => {
             btn.disabled  = false;
             btn.innerHTML = original;
+        });
+
+        document.querySelectorAll('.requirement-file-form').forEach(form => {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const button = this.querySelector('[type="submit"]');
+                const original = button.innerHTML;
+                button.disabled = true;
+                button.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Uploading...';
+
+                fetch('', { method: 'POST', body: new FormData(this) })
+                    .then(async response => {
+                        const text = await response.text();
+                        try { return JSON.parse(text); }
+                        catch { throw new Error('Invalid server response'); }
+                    })
+                    .then(data => {
+                        showToast(data.ok ? 'success' : 'error', data.message);
+                        if (data.ok) setTimeout(() => location.reload(), 900);
+                    })
+                    .catch(error => {
+                        console.error(error);
+                        showToast('error', 'The file could not be uploaded. Please try again.');
+                    })
+                    .finally(() => {
+                        button.disabled = false;
+                        button.innerHTML = original;
+                    });
+            });
         });
 });
 

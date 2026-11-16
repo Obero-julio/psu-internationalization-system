@@ -30,43 +30,40 @@ SELECT
     a.school_year,
     a.approval_date,
     a.status
-
 FROM applications a
-LEFT JOIN users u
-    ON a.applicant_id = u.id
-LEFT JOIN programs p
-    ON a.program_id = p.id
+LEFT JOIN users u ON a.applicant_id = u.id
+LEFT JOIN programs p ON a.program_id = p.id
 WHERE a.status='approved'
+AND a.documents_status = 'complete'
 ORDER BY a.approval_date DESC
 ";
 
 $students = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
-
 function h($value)
 {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 ?>
 
-<link rel="stylesheet" href="../asset/css/approved_students.css">
+<link rel="stylesheet" href="../asset/css/applications.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 
 <div class="content">
 
     <div class="page-header">
         <h2>Approved Students</h2>
-        <p>List of students approved for international mobility programs.</p>
+        <p>List of students approved for international mobility programs with complete documents.</p>
     </div>
 
     <div class="toolbar">
         <div class="search-wrap">
             <i class="fa fa-search"></i>
-            <input type="text" id="searchInput" placeholder="Search student...">
+            <input type="text" id="searchInput" placeholder="Search student by name, program, or partner...">
         </div>
     </div>
 
-    <div class="table-card">
-        <table>
+    <div class="table-section">
+        <table class="table-card">
             <thead>
                 <tr>
                     <th>Student</th>
@@ -85,7 +82,6 @@ function h($value)
                 <?php foreach($students as $row): ?>
                 
                 <?php
-                    // Generate initials for the avatar
                     $initials = '';
                     $parts = explode(' ', trim($row['student_name'] ?? ''));
                     foreach ($parts as $p) {
@@ -94,13 +90,12 @@ function h($value)
                     }
                 ?>
 
-                <tr data-search="<?= strtolower($row['student_name'].' '.$row['program_name'].' '.$row['institution_name']) ?>">
+                <tr data-search="<?= h(strtolower(($row['student_name'] ?? '') . ' ' . ($row['program_name'] ?? '') . ' ' . ($row['institution_name'] ?? ''))) ?>">
                     
-                    <!-- Student Cell with Avatar -->
                     <td>
-                        <div class="student-cell">
-                            <div class="student-avatar"><?= h($initials ?: '?') ?></div>
-                            <div class="student-info">
+                        <div class="applicant-cell">
+                            <div class="applicant-avatar"><?= h($initials ?: '?') ?></div>
+                            <div class="applicant-info">
                                 <strong><?= h($row['student_name']) ?></strong>
                             </div>
                         </div>
@@ -110,7 +105,7 @@ function h($value)
                     <td><?= h($row['institution_name']) ?></td>
                     
                     <td>
-                        <span class="mobility-badge">
+                        <span class="status-badge status-submitted">
                             <i class="fa-solid fa-plane"></i> <?= h($row['mobility_type']) ?>
                         </span>
                     </td>
@@ -118,30 +113,32 @@ function h($value)
                     <td><?= h($row['semester']) ?></td>
                     <td><?= h($row['school_year']) ?></td>
 
-                    <td>
+                    <td class="date-cell">
                         <?= !empty($row['approval_date']) ? date("M d, Y", strtotime($row['approval_date'])) : '—' ?>
                     </td>
 
                     <td>
-                        <span class="status-badge status-<?= strtolower($row['status']) ?>">
-                            <?= ucfirst($row['status']) ?>
+                        <span class="status-badge status-approved">
+                            <?= h(ucfirst($row['status'])) ?>
                         </span>
                     </td>
                 </tr>
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="8" class="empty-row" style="text-align:center; padding:40px; color:#94a3b8;">
-                        No approved students found.
+                    <td colspan="8">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">
+                                <i class="fa fa-folder-open" style="font-size: 30px; color: var(--color-info);"></i>
+                            </div>
+                            <h3>No Approved Students</h3>
+                            <p>No approved students with complete documents found at this time.</p>
+                        </div>
                     </td>
                 </tr>
             <?php endif; ?>
             </tbody>
         </table>
-
-        <div class="pagination">
-            <span>Showing <?= count($students) ?> approved student(s)</span>
-        </div>
     </div>
 </div>
 

@@ -101,7 +101,6 @@ function initials(string $name): string
 <div class="content">
 
     <div class="page-header">
-        <h2><i class="fa-solid fa-plane"></i> Travel Information</h2>
         <p>Manage applicant travel records, including destinations and departure/return schedules.</p>
     </div>
 
@@ -190,7 +189,6 @@ function initials(string $name): string
                         <td colspan="6">
                             <div class="empty-state">
                                 <div class="empty-state-icon">
-                                    <i class="fa-solid fa-plane-circle-xmark"></i>
                                 </div>
                                 <h3>No travel records found</h3>
                                 <p>

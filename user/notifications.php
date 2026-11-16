@@ -11,19 +11,7 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $pdo = db();
-
-/* =========================
-   FETCH NOTIFICATIONS
-========================= */
-$stmt = $pdo->prepare("
-    SELECT id, type, title, message, is_read, created_at
-    FROM notifications
-    WHERE user_id = ?
-    ORDER BY created_at DESC
-    LIMIT 50
-");
-$stmt->execute([$_SESSION['user_id']]);
-$notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$userId = (int)$_SESSION['user_id'];
 
 if (!function_exists('h')) {
     function h($value): string {
@@ -32,13 +20,33 @@ if (!function_exists('h')) {
 }
 
 /* =========================
-   COUNTS (all / unread / per-type)
+   FETCH NOTIFICATIONS
+   Only what the applicant should see:
+     - admin applications updates (approved/rejected)
+     - admin announcements
+     - document reminders
 ========================= */
-$totalCount   = count($notifications);
-$unreadCount  = 0;
-$typeCounts   = [
+$stmt = $pdo->prepare("
+    SELECT id, type, title, message, is_read, created_at
+    FROM notifications
+    WHERE user_id = ?
+      AND type IN ('application', 'approval', 'rejected', 'document', 'reminder', 'announcement')
+    ORDER BY created_at DESC
+    LIMIT 50
+");
+$stmt->execute([$userId]);
+$notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+/* =========================
+   COUNTS
+========================= */
+$totalCount  = count($notifications);
+$unreadCount = 0;
+$typeCounts  = [
     'application'  => 0,
     'approval'     => 0,
+    'rejected'     => 0,
+    'document'     => 0,
     'reminder'     => 0,
     'announcement' => 0,
 ];
@@ -50,20 +58,22 @@ foreach ($notifications as $n) {
     }
 }
 
-/* ICON MAP: [icon class, label, css modifier suffix] */
+/* ICON MAP */
 $typeMap = [
-    'application'  => ['ti-clipboard-check', 'Application Update', ''],
-    'approval'     => ['ti-check',           'Approval Update',    'approval'],
-    'document'     => ['ti-file-alert',       'Document Requirement', ''],
-    'reminder'     => ['ti-alarm',            'Travel Reminder',    'reminder'],
-    'announcement' => ['ti-speakerphone',     'System Announcement','announcement'],
-    'default'      => ['ti-bell',             'Notification',       '']
+    'application'  => ['ti-clipboard-check',   'Application Update',   ''],
+    'approval'     => ['ti-check',             'Approved',             'approval'],
+    'rejected'     => ['ti-x',                 'Rejected',             'rejected'],
+    'document'     => ['ti-file-alert',        'Document Requirement', ''],
+    'reminder'     => ['ti-alarm',             'Travel Reminder',      'reminder'],
+    'announcement' => ['ti-speakerphone',      'Announcement',         'announcement'],
+    'default'      => ['ti-bell',              'Notification',         ''],
 ];
 
 $tagLabels = [
     'application'  => 'Applications',
     'approval'     => 'Approvals',
-    'document' => 'Documents',
+    'rejected'     => 'Rejections',
+    'document'     => 'Documents',
     'reminder'     => 'Reminders',
     'announcement' => 'Announcements',
 ];
@@ -88,33 +98,45 @@ $tagLabels = [
             </div>
         </div>
 
-        <button class="btn-mark-all" id="markAllBtn" onclick="markAllRead()" <?= $unreadCount === 0 ? 'disabled' : '' ?>>
+        <button class="btn-mark-all" id="markAllBtn"
+                onclick="markAllRead()"
+                <?= $unreadCount === 0 ? 'disabled' : '' ?>>
             <i class="ti ti-checks"></i> Mark all as read
         </button>
     </div>
 
     <div class="notification-filters">
         <button class="active" data-filter="all" onclick="filter('all', this)">
-            <i class="ti ti-layout-grid"></i> All <span class="filter-count"><?= $totalCount ?></span>
+            <i class="ti ti-layout-grid"></i> All
+            <span class="filter-count"><?= $totalCount ?></span>
         </button>
         <button data-filter="unread" onclick="filter('unread', this)">
-            <i class="ti ti-mail"></i> Unread <span class="filter-count"><?= $unreadCount ?></span>
+            <i class="ti ti-mail"></i> Unread
+            <span class="filter-count"><?= $unreadCount ?></span>
         </button>
         <button data-filter="application" onclick="filter('application', this)">
-            <i class="ti ti-file-description"></i> Applications <span class="filter-count"><?= $typeCounts['application'] ?></span>
+            <i class="ti ti-file-description"></i> Applications
+            <span class="filter-count"><?= $typeCounts['application'] ?></span>
         </button>
         <button data-filter="approval" onclick="filter('approval', this)">
-            <i class="ti ti-circle-check"></i> Approvals <span class="filter-count"><?= $typeCounts['approval'] ?></span>
+            <i class="ti ti-circle-check"></i> Approved
+            <span class="filter-count"><?= $typeCounts['approval'] ?></span>
         </button>
-        <button data-filter="reminder" onclick="filter('reminder', this)">
-            <i class="ti ti-bell"></i> Reminders <span class="filter-count"><?= $typeCounts['reminder'] ?></span>
+        <button data-filter="rejected" onclick="filter('rejected', this)">
+            <i class="ti ti-circle-x"></i> Rejected
+            <span class="filter-count"><?= $typeCounts['rejected'] ?></span>
         </button>
         <button data-filter="document" onclick="filter('document', this)">
-            <i class="ti ti-file-alert"></i>
-            Documents
-            <span class="filter-count">
-                <?= $typeCounts['document'] ?>
-            </span>
+            <i class="ti ti-file-alert"></i> Documents
+            <span class="filter-count"><?= $typeCounts['document'] ?></span>
+        </button>
+        <button data-filter="reminder" onclick="filter('reminder', this)">
+            <i class="ti ti-bell"></i> Reminders
+            <span class="filter-count"><?= $typeCounts['reminder'] ?></span>
+        </button>
+        <button data-filter="announcement" onclick="filter('announcement', this)">
+            <i class="ti ti-speakerphone"></i> Announcements
+            <span class="filter-count"><?= $typeCounts['announcement'] ?></span>
         </button>
     </div>
 
@@ -141,7 +163,7 @@ $tagLabels = [
              data-id="<?= (int)$n['id'] ?>"
              data-type="<?= h($n['type']) ?>"
              data-read="<?= $isUnread ? 'unread' : 'read' ?>"
-             data-time="<?= h(strtotime($n['created_at'])) ?>"
+             data-time="<?= (int)strtotime($n['created_at']) ?>"
              onclick="markRead(this)">
 
             <div class="notification-icon <?= $mod ? 'icon-' . h($mod) : '' ?>">
@@ -151,11 +173,15 @@ $tagLabels = [
             <div class="notification-content">
                 <div class="notification-title"><?= h($n['title']) ?></div>
                 <div class="notification-message"><?= h($n['message']) ?></div>
-                <div class="notification-tag <?= $mod ? 'tag-' . h($mod) : '' ?>"><?= h($tagLabel) ?></div>
+                <div class="notification-tag <?= $mod ? 'tag-' . h($mod) : '' ?>">
+                    <?= h($tagLabel) ?>
+                </div>
             </div>
 
             <div class="notification-meta">
-                <span class="notification-time"><?= date('M d, Y g:i A', strtotime($n['created_at'])) ?></span>
+                <span class="notification-time">
+                    <?= date('M d, Y g:i A', strtotime($n['created_at'])) ?>
+                </span>
                 <span class="notification-status-dot"></span>
             </div>
 
@@ -173,12 +199,7 @@ $tagLabels = [
 
     </div>
 
-    <div class="notification-footer">
-        <a href="notifications_all.php">View all notifications <i class="ti ti-arrow-right"></i></a>
-    </div>
-
 </div>
-
 </div>
 
 <script>
@@ -188,10 +209,10 @@ let sortAscending = false;
 function markRead(el) {
     if (el.dataset.read === 'read') return;
 
-    fetch('../admin/markread.php', {
+    fetch(window.NOTIF_CONFIG.baseUrl + '/markread.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: el.dataset.id })
+        body: JSON.stringify({ id: el.dataset.id, csrf_token: window.NOTIF_CONFIG.csrf })
     })
     .then(async res => {
         const text = await res.text();
@@ -212,7 +233,11 @@ function markRead(el) {
 
 /* ── Mark all as read ── */
 function markAllRead() {
-    fetch('../admin/markallread.php', { method: 'POST' })
+    fetch(window.NOTIF_CONFIG.baseUrl + '/markallread.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csrf_token: window.NOTIF_CONFIG.csrf })
+    })
     .then(async res => {
         const text = await res.text();
         try { return JSON.parse(text); }
@@ -233,31 +258,36 @@ function markAllRead() {
     .catch(() => showToast('error', 'Could not reach the server.'));
 }
 
-/* ── Update filter counts + mark-all button state ── */
+/* ── Rebuild filter counts from the DOM (including every type) ── */
 function updateCounts() {
     const items = document.querySelectorAll('.notification-item');
-    const counts = { all: items.length, unread: 0, application: 0, approval: 0, reminder: 0, announcement: 0 };
+    const counts = { all: items.length, unread: 0 };
 
     items.forEach(el => {
+        const t = el.dataset.type;
         if (el.dataset.read === 'unread') counts.unread++;
-        if (counts[el.dataset.type] !== undefined) counts[el.dataset.type]++;
+        counts[t] = (counts[t] || 0) + 1;
     });
 
-    Object.keys(counts).forEach(key => {
-        const btn = document.querySelector(`.notification-filters button[data-filter="${key}"] .filter-count`);
-        if (btn) btn.textContent = counts[key];
+    document.querySelectorAll('.notification-filters button').forEach(btn => {
+        const key = btn.dataset.filter;
+        const span = btn.querySelector('.filter-count');
+        if (!span) return;
+        if (counts[key] !== undefined) span.textContent = counts[key];
     });
 
     const markAllBtn = document.getElementById('markAllBtn');
     if (markAllBtn) markAllBtn.disabled = counts.unread === 0;
 }
 
-/* ── Filter ── */
+/* ── Filter (uses single active state, works with any new type) ── */
 function filter(type, btn) {
     document.querySelectorAll('.notification-item').forEach(el => {
-        const matchType = (type === 'all' || type === 'unread') ? true : el.dataset.type === type;
-        const matchRead = type !== 'unread' ? true : el.dataset.read === 'unread';
-        el.style.display = (matchType && matchRead) ? '' : 'none';
+        let show = false;
+        if (type === 'all')         show = true;
+        else if (type === 'unread') show = el.dataset.read === 'unread';
+        else                        show = el.dataset.type === type;
+        el.style.display = show ? '' : 'none';
     });
 
     document.querySelectorAll('.notification-filters button')
@@ -268,13 +298,14 @@ function filter(type, btn) {
 /* ── Sort ── */
 function toggleSort() {
     sortAscending = !sortAscending;
-    document.getElementById('sortLabel').textContent = sortAscending ? 'Oldest first' : 'Latest first';
+    document.getElementById('sortLabel').textContent =
+        sortAscending ? 'Oldest first' : 'Latest first';
 
-    const list = document.getElementById('notificationList');
+    const list  = document.getElementById('notificationList');
     const items = Array.from(list.querySelectorAll('.notification-item'));
 
     items.sort((a, b) => {
-        const diff = a.dataset.time - b.dataset.time;
+        const diff = Number(a.dataset.time) - Number(b.dataset.time);
         return sortAscending ? diff : -diff;
     });
 
@@ -302,4 +333,9 @@ function showToast(type, message) {
         setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
+
+window.NOTIF_CONFIG = {
+    baseUrl: '.',
+    csrf: <?= json_encode($_SESSION['csrf_token'] ?? '') ?>
+};
 </script>

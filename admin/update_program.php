@@ -37,19 +37,41 @@ try {
     $pdo = db();
 
     $partnerStmt = $pdo->prepare("
-        SELECT institution_name
+        SELECT status
         FROM partners
-        WHERE id = ? AND country_id = ? AND status = 'Active'
+        WHERE id = ? AND country_id = ?
     ");
     $partnerStmt->execute([$partnerId, $countryId]);
-    $partnerInstitution = $partnerStmt->fetchColumn();
+    $partner = $partnerStmt->fetch(PDO::FETCH_ASSOC);
 
-    if ($partnerInstitution === false) {
+    if ($partner === false) {
         echo json_encode([
             'success' => false,
             'message' => 'The selected partner is not available for this country.'
         ]);
         exit;
+    }
+
+    if (strcasecmp((string)$partner['status'], 'Active') !== 0) {
+        $currentStmt = $pdo->prepare("
+            SELECT partner_id, country_id
+            FROM programs
+            WHERE id = ?
+        ");
+        $currentStmt->execute([$programId]);
+        $currentProgram = $currentStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (
+            $currentProgram === false ||
+            (int)$currentProgram['partner_id'] !== $partnerId ||
+            (int)$currentProgram['country_id'] !== $countryId
+        ) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'The selected partner is not available for this country.'
+            ]);
+            exit;
+        }
     }
 
     $stmt = $pdo->prepare("
@@ -59,7 +81,6 @@ try {
             status = ?,
             country_id = ?,
             partner_id = ?,
-            partner_institution = ?,
             start_date = ?,
             end_date = ?,
             description = ?
@@ -72,7 +93,6 @@ try {
         $status,
         $countryId,
         $partnerId,
-        $partnerInstitution,
         $startDate,
         $endDate,
         $description,
