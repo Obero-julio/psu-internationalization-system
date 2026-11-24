@@ -31,7 +31,11 @@ if (!function_exists('h')) {
 
 /*
 |--------------------------------------------------------------------------
+<<<<<<< HEAD
 | Fetch Approved Students (Who have submitted complete documents)
+=======
+| Fetch Approved Students (Who have submitted documents)
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 |--------------------------------------------------------------------------
 */
 $sql = "
@@ -54,6 +58,7 @@ SELECT
 FROM applications a
 LEFT JOIN users u ON a.applicant_id = u.id
 LEFT JOIN programs p ON a.program_id = p.id
+<<<<<<< HEAD
 LEFT JOIN countries c ON p.country_id = c.id
 WHERE LOWER(TRIM(a.status)) = 'approved'
 ORDER BY a.reviewed_at DESC
@@ -69,6 +74,17 @@ foreach ($students as $r) {
     $c = trim((string)($r['country_name'] ?? ''));
     if ($m !== '') $mobilityTypes[strtolower($m)] = $m;
     if ($c !== '') $countryNames[strtolower($c)]  = $c;
+=======
+WHERE a.status='approved'
+AND a.documents_status = 'complete'
+ORDER BY a.approval_date DESC
+";
+
+$students = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+function h($value)
+{
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 }
 ksort($mobilityTypes);
 ksort($countryNames);
@@ -97,6 +113,7 @@ ksort($countryNames);
 
     <div class="page-header">
         <h2>Approved Students</h2>
+<<<<<<< HEAD
         <p>Every applicant approved in Applications Management appears here. Document status is shown for each student.</p>
     </div>
 
@@ -112,11 +129,15 @@ ksort($countryNames);
                 <div class="summary-label"><?= h($label) ?></div>
             </div>
         <?php endforeach; ?>
+=======
+        <p>List of students approved for international mobility programs with complete documents.</p>
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
     </div>
 
     <div class="toolbar">
         <div class="search-wrap">
             <i class="fa fa-search"></i>
+<<<<<<< HEAD
             <input type="text" id="searchInput" placeholder="Search student by name, program, country, or partner...">
         </div>
     </div>
@@ -145,6 +166,12 @@ ksort($countryNames);
         <button type="button" id="resetFilters"><i class="fa fa-rotate-left"></i> Reset</button>
     </div>
 
+=======
+            <input type="text" id="searchInput" placeholder="Search student by name, program, or partner...">
+        </div>
+    </div>
+
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
     <div class="table-section">
         <table class="table-card">
             <thead>
@@ -180,11 +207,16 @@ ksort($countryNames);
                                  : ($mobilityKey === 'outbound' ? 'fa-plane-departure' : 'fa-plane');
                 ?>
 
+<<<<<<< HEAD
                 <tr data-search="<?= h(strtolower(($row['student_name'] ?? '') . ' ' . ($row['program_name'] ?? '') . ' ' . ($row['country_name'] ?? '') . ' ' . ($row['institution_name'] ?? ''))) ?>"
                     data-mobility="<?= h($mobilityKey) ?>"
                     data-country="<?= h($countryKey) ?>"
                     data-docs="<?= h(strtolower(trim((string)($row['documents_status'] ?? '')))) ?>">
 
+=======
+                <tr data-search="<?= h(strtolower(($row['student_name'] ?? '') . ' ' . ($row['program_name'] ?? '') . ' ' . ($row['institution_name'] ?? ''))) ?>">
+                    
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
                     <td>
                         <div class="applicant-cell">
                             <div class="applicant-avatar"><?= h($initials ?: '?') ?></div>
@@ -200,7 +232,11 @@ ksort($countryNames);
 
                     <td>
                         <span class="status-badge status-submitted">
+<<<<<<< HEAD
                             <i class="fa-solid <?= $planeIcon ?>"></i> <?= h($row['mobility_type']) ?>
+=======
+                            <i class="fa-solid fa-plane"></i> <?= h($row['mobility_type']) ?>
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
                         </span>
                     </td>
 
@@ -212,6 +248,7 @@ ksort($countryNames);
                     </td>
 
                     <td>
+<<<<<<< HEAD
                         <?php $docsKey = strtolower(trim((string)($row['documents_status'] ?? ''))); ?>
                         <span class="status-badge <?= $docsKey === 'complete' ? 'status-approved' : 'status-submitted' ?>">
                             <?= $docsKey !== '' ? h(ucfirst($docsKey)) : 'Not submitted' ?>
@@ -219,6 +256,8 @@ ksort($countryNames);
                     </td>
 
                     <td>
+=======
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
                         <span class="status-badge status-approved">
                             <?= h(ucfirst($row['status'])) ?>
                         </span>
@@ -233,7 +272,11 @@ ksort($countryNames);
                 </tr>
             <?php else: ?>
                 <tr>
+<<<<<<< HEAD
                     <td colspan="10">
+=======
+                    <td colspan="8">
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
                         <div class="empty-state">
                             <div class="empty-state-icon">
                                 <i class="fa fa-folder-open" style="font-size: 30px; color: var(--color-info);"></i>

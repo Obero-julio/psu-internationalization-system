@@ -1,5 +1,8 @@
 <?php
+<<<<<<< HEAD
 require __DIR__ . '/download_handler.php';
+=======
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 if (!isset($pdo, $userId, $user) || !($pdo instanceof PDO)) {
     header('Location: dashboard.php?page=home');
     exit;
@@ -23,6 +26,7 @@ $stmt = $pdo->prepare("
 $stmt->execute([$userId]);
 $approved = $stmt->fetch(PDO::FETCH_ASSOC);
 
+<<<<<<< HEAD
 /* Application counts for stats */
 $stmt = $pdo->prepare("
     SELECT status, COUNT(*) AS application_count
@@ -35,11 +39,33 @@ $statusCounts = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 $pendingCount = (int)($statusCounts['pending'] ?? 0) + (int)($statusCounts['submitted'] ?? 0);
 $underReviewCount = (int)($statusCounts['under_review'] ?? 0);
 
+=======
+/* Recent notifications */
+$stmt = $pdo->prepare("
+    SELECT id, type, title, message, is_read, created_at
+    FROM notifications WHERE user_id = ?
+    ORDER BY created_at DESC LIMIT 5
+");
+$stmt->execute([$userId]);
+$recentNotifs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+/* Application counts */
+$stmt = $pdo->prepare("
+    SELECT status, COUNT(*) AS application_count
+    FROM applications
+    WHERE applicant_id = ?
+    GROUP BY status
+");
+$stmt->execute([$userId]);
+$statusCounts = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0");
 $stmt->execute([$userId]);
 $unreadCount = (int)$stmt->fetchColumn();
 ?>
 
+<<<<<<< HEAD
 <style>
     /* Local scoped styles for home dashboard to ensure consistency */
     .home-dashboard {
@@ -341,8 +367,29 @@ $unreadCount = (int)$stmt->fetchColumn();
         </div>
     </div>
 
+=======
+<?php if ($approved): ?>
+<div class="approval-banner">
+    <div class="banner-body">
+        <h3>Your application was approved!</h3>
+        <p><strong><?= h($approved['program_name'] ?? 'Approved program') ?></strong>
+           <?php if (!empty($approved['host_country'])): ?> — <?= h($approved['host_country']) ?><?php endif; ?>
+        </p>
+        <p>
+            <?php if (!empty($approved['program_start_date']) && !empty($approved['program_end_date'])): ?>
+                Program: <?= h(date('M d, Y', strtotime($approved['program_start_date']))) ?>
+                – <?= h(date('M d, Y', strtotime($approved['program_end_date']))) ?>
+            <?php endif; ?>
+        </p>
+        <a class="btn-primary" href="?page=my_application_detail&id=<?= (int)$approved['id'] ?>">
+            View Full Details →
+        </a>
+    </div>
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 </div>
+<?php endif; ?>
 
+<<<<<<< HEAD
 <!-- Chart.js Initialization -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -445,3 +492,59 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+=======
+<div class="content-card">
+    <div class="page-header">
+        <div>
+            <h2>Welcome back, <?= h($user['first_name'] ?? 'Applicant') ?>!</h2>
+            <p>Here's an overview of your application activity.</p>
+        </div>
+    </div>
+
+    <div class="stat-grid">
+        <div class="stat-card">
+            <i class="fa-regular fa-file-lines"></i>
+            <div>
+                <span class="stat-value"><?= array_sum($statusCounts) ?></span>
+                <span class="stat-label">Total Applications</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <i class="fa-solid fa-hourglass-half"></i>
+            <div>
+                <span class="stat-value"><?= (int)($statusCounts['pending'] ?? 0) + (int)($statusCounts['under_review'] ?? 0) ?></span>
+                <span class="stat-label">In Review</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <i class="fa-solid fa-circle-check"></i>
+            <div>
+                <span class="stat-value"><?= (int)($statusCounts['approved'] ?? 0) ?></span>
+                <span class="stat-label">Approved</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <i class="fa-regular fa-bell"></i>
+            <div>
+                <span class="stat-value"><?= $unreadCount ?? 0 ?></span>
+                <span class="stat-label">Unread Alerts</span>
+            </div>
+        </div>
+    </div>
+
+    <h3 class="section-title">Recent Notifications</h3>
+    <?php if ($recentNotifs): ?>
+        <ul class="mini-notif-list">
+            <?php foreach ($recentNotifs as $n): ?>
+                <li class="<?= $n['is_read'] ? '' : 'unread' ?>">
+                    <strong><?= h($n['title']) ?></strong>
+                    <small><?= date('M d, Y g:i A', strtotime($n['created_at'])) ?></small>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+        <a href="?page=notifications" class="link-more">View all →</a>
+    <?php else: ?>
+        <p class="muted">No notifications yet.</p>
+    <?php endif; ?>
+</div>
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666

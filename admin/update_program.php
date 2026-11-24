@@ -97,7 +97,10 @@ try {
         exit;
     }
 
+<<<<<<< HEAD
     // If partner is inactive, ensure the program isn't changing to a different inactive partner
+=======
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
     if (strcasecmp((string)$partner['status'], 'Active') !== 0) {
         $currentStmt = $pdo->prepare("
             SELECT partner_id, country_id

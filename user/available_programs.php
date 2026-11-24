@@ -1,9 +1,14 @@
 <?php
+<<<<<<< HEAD
 if (!isset($pdo, $userId, $user) || !($pdo instanceof PDO)) {
+=======
+if (!isset($pdo, $userId) || !($pdo instanceof PDO)) {
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
     header('Location: dashboard.php?page=available_programs');
     exit;
 }
 
+<<<<<<< HEAD
 $message = '';
 $msgType = '';
 
@@ -531,6 +536,32 @@ try {
 </style>
 
 <div class="content-card available-programs-page">
+=======
+$stmt = $pdo->prepare("
+    SELECT
+        p.id,
+        p.program_name,
+        p.description,
+        p.start_date,
+        p.end_date,
+        country.country_name,
+        EXISTS(
+            SELECT 1
+            FROM applications a
+            WHERE a.applicant_id = ? AND a.program_id = p.id
+        ) AS already_applied
+    FROM programs p
+    LEFT JOIN countries country ON country.id = p.country_id
+    WHERE p.status IN ('Active', 'Upcoming')
+      AND p.end_date >= CURDATE()
+    ORDER BY p.start_date, p.program_name
+");
+$stmt->execute([$userId]);
+$programs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+?>
+
+<div class="content-card">
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
     <div class="page-header">
         <div>
             <h2>Available Programs</h2>
@@ -538,6 +569,7 @@ try {
         </div>
     </div>
 
+<<<<<<< HEAD
     <?php if (!empty($message)): ?>
         <div class="program-alert <?= h($msgType) ?>" role="<?= $msgType === 'success' ? 'status' : 'alert' ?>">
             <i class="fa-solid <?= $msgType === 'success' ? 'fa-circle-check' : 'fa-triangle-exclamation' ?>"></i>
@@ -550,6 +582,10 @@ try {
             <h3>No programs available</h3>
             <p>No programs are open for application right now. Please check back later.</p>
         </div>
+=======
+    <?php if (empty($programs)): ?>
+        <p class="muted">No programs are open for application right now.</p>
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
     <?php else: ?>
     <div class="program-grid">
         <?php foreach ($programs as $p): ?>
@@ -560,6 +596,7 @@ try {
                     <span class="country-chip"><i class="fa-solid fa-location-dot"></i> <?= h($p['country_name']) ?></span>
                 <?php endif; ?>
             </div>
+<<<<<<< HEAD
             
             <p class="program-desc"><?= h(mb_strimwidth((string)$p['description'], 0, 140, '…')) ?></p>
             
@@ -583,12 +620,31 @@ try {
                     <button type="button" class="btn-primary" onclick="openProgramModal(<?= (int)$p['id'] ?>)">
                         View Details & Apply
                     </button>
+=======
+            <p class="program-desc"><?= h(mb_strimwidth((string)$p['description'], 0, 160, '…')) ?></p>
+            <div class="program-meta">
+                <?php if (!empty($p['start_date']) && !empty($p['end_date'])): ?>
+                    <span>
+                        <i class="fa-regular fa-calendar"></i>
+                        <?= h(date('M d, Y', strtotime($p['start_date']))) ?>
+                        – <?= h(date('M d, Y', strtotime($p['end_date']))) ?>
+                    </span>
+                <?php endif; ?>
+            </div>
+            <div class="program-card-actions">
+                <?php if ($p['already_applied']): ?>
+                    <span class="badge-success">Already applied</span>
+                    <a class="btn-secondary" href="?page=my_applications">View status</a>
+                <?php else: ?>
+                    <a class="btn-primary" href="?page=program_detail&id=<?= (int)$p['id'] ?>">View & Apply →</a>
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
                 <?php endif; ?>
             </div>
         </div>
         <?php endforeach; ?>
     </div>
     <?php endif; ?>
+<<<<<<< HEAD
 </div>
 
 <!-- The Modal -->
@@ -719,3 +775,6 @@ try {
         }
     });
 </script>
+=======
+</div>
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666

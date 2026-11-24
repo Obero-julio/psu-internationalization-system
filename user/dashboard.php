@@ -9,6 +9,7 @@ if (empty($_SESSION['user_id'])) {
     exit;
 }
 
+<<<<<<< HEAD
 require __DIR__ . '/download_handler.php';
 
 
@@ -16,6 +17,12 @@ $pdo    = db();
 $userId = (int)$_SESSION['user_id'];
 
 /* Load full user row */
+=======
+$pdo    = db();
+$userId = (int)$_SESSION['user_id'];
+
+/* Load full user row for the header + profile pages */
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->execute([$userId]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -25,13 +32,18 @@ if (!$user) {
     exit;
 }
 
+<<<<<<< HEAD
 /* Whitelist of pages */
+=======
+/* Whitelist of pages — prevents arbitrary include */
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 $routes = [
     'home'                  => 'home.php',
     'available_programs'    => 'available_programs.php',
     'program_detail'        => 'program_detail.php',
     'apply'                 => 'apply.php',
     'my_applications'       => 'my_applications.php',
+<<<<<<< HEAD
     'application_status'    => 'my_applications.php',
     'my_application_detail' => 'my_application_detail.php',
     'documents'             => 'documents.php',
@@ -48,6 +60,18 @@ if (!isset($routes[$page])) {
     $page = 'home';
 }
 $route = $routes[$page];
+=======
+    'my_application_detail' => 'my_application_detail.php',
+    'documents'             => 'documents.php',
+    'notifications'         => 'notifications.php',
+    'profile'               => 'profile.php',
+    'settings'              => 'settings.php',
+];
+
+$page  = is_string($_GET['page'] ?? null) ? $_GET['page'] : 'home';
+$route = $routes[$page] ?? $routes['home'];
+$page  = array_search($route, $routes, true) ?: 'home'; // normalise
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 
 /* CSRF token */
 if (empty($_SESSION['csrf_token'])) {
@@ -61,9 +85,15 @@ function checkCsrf(): bool {
         && hash_equals($_SESSION['csrf_token'], (string)$_POST['csrf_token']);
 }
 
+<<<<<<< HEAD
 /* Stream authorized document downloads */
 $downloadType = is_string($_GET['download_type'] ?? null) ? $_GET['download_type'] : '';
 if (in_array($page, ['documents', 'forms_requirements'], true) && $downloadType !== '') {
+=======
+/* Stream authorized document downloads before rendering the portal shell. */
+$downloadType = is_string($_GET['download_type'] ?? null) ? $_GET['download_type'] : '';
+if ($page === 'documents' && $downloadType !== '') {
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
     $itemId = (int)($_GET['id'] ?? $_GET['req'] ?? 0);
     $storedPath = false;
     $disposition = 'inline';
@@ -76,13 +106,19 @@ if (in_array($page, ['documents', 'forms_requirements'], true) && $downloadType 
         $stmt = $pdo->prepare("
             SELECT pr.requirement_file
             FROM program_requirements pr
+<<<<<<< HEAD
             INNER JOIN applications a ON a.program_id = pr.program_id
             WHERE pr.id = ? AND a.applicant_id = ? AND a.status = 'approved'
+=======
+            INNER JOIN users u ON u.program_id = pr.program_id
+            WHERE pr.id = ? AND u.id = ?
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
             LIMIT 1
         ");
         $stmt->execute([$itemId, $userId]);
         $storedPath = $stmt->fetchColumn();
         $disposition = 'attachment';
+<<<<<<< HEAD
     } elseif ($downloadType === 'managed_form') {
         $stmt = $pdo->prepare("
             SELECT file_path
@@ -93,20 +129,39 @@ if (in_array($page, ['documents', 'forms_requirements'], true) && $downloadType 
         $stmt->execute([$itemId]);
         $storedPath = $stmt->fetchColumn();
         $disposition = 'attachment';
+=======
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
     } else {
         http_response_code(400);
         exit('Invalid download request.');
     }
 
     $relativePath = is_string($storedPath) ? str_replace('\\', '/', $storedPath) : '';
+<<<<<<< HEAD
     if ($relativePath === '' || str_starts_with($relativePath, '/') || preg_match('~(^|/)\.\.(/|$)~', $relativePath)) {
+=======
+    if (
+        $relativePath === ''
+        || str_starts_with($relativePath, '/')
+        || preg_match('~(^|/)\.\.(/|$)~', $relativePath)
+    ) {
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
         http_response_code(404);
         exit('File not found.');
     }
 
     $uploadsRoot = realpath(__DIR__ . '/../uploads');
     $fullPath = realpath(__DIR__ . '/../' . $relativePath);
+<<<<<<< HEAD
     if ($uploadsRoot === false || $fullPath === false || !str_starts_with($fullPath, $uploadsRoot . DIRECTORY_SEPARATOR) || !is_file($fullPath)) {
+=======
+    if (
+        $uploadsRoot === false
+        || $fullPath === false
+        || !str_starts_with($fullPath, $uploadsRoot . DIRECTORY_SEPARATOR)
+        || !is_file($fullPath)
+    ) {
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
         http_response_code(404);
         exit('File not found.');
     }
@@ -121,6 +176,7 @@ if (in_array($page, ['documents', 'forms_requirements'], true) && $downloadType 
 }
 
 $userName = trim((string)($user['first_name'] ?? 'Applicant'));
+<<<<<<< HEAD
 
 /* Fetch recent notifications + unread count */
 $stmt = $pdo->prepare("SELECT id, title, message, is_read, created_at FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 5");
@@ -131,12 +187,17 @@ $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND 
 $stmt->execute([$userId]);
 $unreadCount = (int)$stmt->fetchColumn();
 
+=======
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 $pageStyles = [
     'available_programs' => ['available_programs.css'],
     'program_detail' => ['apply.css'],
     'apply' => ['apply.css'],
     'my_applications' => ['my_applications.css'],
+<<<<<<< HEAD
     'application_status' => ['my_applications.css'],
+=======
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
     'my_application_detail' => ['my_applications.css'],
     'profile' => ['profile.css'],
     'settings' => ['apply.css'],
@@ -147,6 +208,7 @@ $pageStyles = [
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<<<<<<< HEAD
     <title>PSU Internationalization — Applicant Portal</title>
     
     <!-- Fonts & Icons -->
@@ -156,12 +218,18 @@ $pageStyles = [
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     
     <!-- External CSS -->
+=======
+    <title>PSU Internalization — Applicant Portal</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="../asset/css/dashboard.css">
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
     <link rel="stylesheet" href="../asset/css/user_accessibility.css">
     <link rel="stylesheet" href="../asset/css/upload_docs.css">
     <link rel="stylesheet" href="../asset/css/notifications.css">
     <?php foreach ($pageStyles[$page] ?? [] as $stylesheet): ?>
         <link rel="stylesheet" href="../asset/css/<?= h($stylesheet) ?>">
     <?php endforeach; ?>
+<<<<<<< HEAD
 
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -837,5 +905,36 @@ $pageStyles = [
         });
     });
 </script>
+=======
+</head>
+<body>
+
+<a class="skip-link" href="#mainContent">Skip to main content</a>
+<?php include __DIR__ . '/sidebar.php'; ?>
+
+<main class="container" id="mainContent">
+    <header class="topbar">
+        <div class="topbar-left">
+        <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Open menu" aria-controls="mainSidebar" aria-expanded="false">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+        <div class="topbar-title"><?= h(ucwords(str_replace('_', ' ', $page))) ?></div>
+        </div>
+        <a class="user" href="?page=profile" aria-label="View profile for <?= h($userName) ?>">
+            <span class="user-avatar" aria-hidden="true"><?= h(strtoupper(substr($userName, 0, 1))) ?></span>
+            <span class="user-info">
+                <span class="user-name"><?= h($userName) ?></span>
+                <span class="user-role">Applicant</span>
+            </span>
+        </a>
+    </header>
+
+    <div class="page-body">
+        <?php include __DIR__ . '/' . $route; ?>
+    </div>
+</main>
+
+<script src="../asset/js/sidebar.js"></script>
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 </body>
 </html>

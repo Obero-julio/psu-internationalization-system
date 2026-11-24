@@ -102,8 +102,12 @@ $travel = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 <div class="content">
     <div class="page-header">
+<<<<<<< HEAD
         <h2>Travel Information</h2>
         <p>Manage flight logistics and travel statuses for approved students.</p>
+=======
+        <p>Manage applicant travel records, including destinations and departure/return schedules.</p>
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
     </div>
 
     <div class="toolbar">
@@ -137,6 +141,7 @@ $travel = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 </tr>
             </thead>
             <tbody>
+<<<<<<< HEAD
             <?php if (!empty($travel)): ?>
                 <?php foreach ($travel as $t): ?>
                     <?php
@@ -181,6 +186,75 @@ $travel = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <?php else: ?>
                 <tr><td colspan="6" class="empty-row">No travel records found.</td></tr>
             <?php endif; ?>
+=======
+
+                <?php if (!empty($travels)): ?>
+
+                    <?php foreach ($travels as $t): ?>
+                        <?php
+                        [$statusClass, $statusLabel] = travel_status(
+                            $t['departure_date'],
+                            $t['return_date']
+                        );
+                        $name = $t['applicant_name'] ?? '';
+                        ?>
+                        <tr>
+                            <td>
+                                <div class="user-name-cell">
+                                    <div class="user-avatar"><?= htmlspecialchars(initials($name ?: '?')) ?></div>
+                                    <span><?= htmlspecialchars($name) ?></span>
+                                </div>
+                            </td>
+
+                            <td>
+                                <span class="badge">
+                                    <i class="fa-solid fa-location-dot"></i>
+                                    <?= htmlspecialchars($t['destination']) ?>
+                                </span>
+                            </td>
+
+                            <td><?= htmlspecialchars(format_date($t['departure_date'])) ?></td>
+                            <td><?= htmlspecialchars(format_date($t['return_date'])) ?></td>
+
+                            <td>
+                                <span class="status-badge status-<?= htmlspecialchars($statusClass) ?>">
+                                    <?= htmlspecialchars($statusLabel) ?>
+                                </span>
+                            </td>
+
+                            <td>
+                                <div class="actions">
+                                    <button class="action-btn edit-btn" title="Edit" onclick='openEditModal(<?= json_encode($t) ?>)'>
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+                                    <button class="action-btn delete-btn" title="Delete" onclick="deleteRecord(<?= (int)$t['id'] ?>)">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+
+                <?php else: ?>
+
+                    <tr>
+                        <td colspan="6">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                </div>
+                                <h3>No travel records found</h3>
+                                <p>
+                                    <?= $search !== ''
+                                        ? 'Try adjusting your search terms.'
+                                        : 'Add a travel record to get started.' ?>
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+
+                <?php endif; ?>
+
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
             </tbody>
         </table>
     </div>

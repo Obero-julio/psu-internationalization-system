@@ -62,7 +62,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         exit();
     }
 
+<<<<<<< HEAD
     $requirementStmt = $pdo->prepare("SELECT requirement_file FROM program_requirements WHERE id = ?");
+=======
+    $requirementStmt = $pdo->prepare("
+        SELECT requirement_file
+        FROM program_requirements
+        WHERE id = ?
+    ");
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
     $requirementStmt->execute([$programRequirementId]);
     $oldFilePath = $requirementStmt->fetchColumn();
 
@@ -101,7 +109,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     }
 
     try {
+<<<<<<< HEAD
         $updateStmt = $pdo->prepare("UPDATE program_requirements SET requirement_file = ? WHERE id = ?");
+=======
+        $updateStmt = $pdo->prepare("
+            UPDATE program_requirements
+            SET requirement_file = ?
+            WHERE id = ?
+        ");
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
         $updateStmt->execute([$relativePath, $programRequirementId]);
     } catch (PDOException $e) {
         unlink($destination);
@@ -168,7 +184,17 @@ $totalCount = (int)$pdo->query("SELECT COUNT(*) FROM program_requirements")->fet
 $totalPages = max(1, ceil($totalCount / $limit));
 
 $stmt = $pdo->prepare("
+<<<<<<< HEAD
     SELECT pr.id, p.program_name, r.requirement_name, pr.is_required, pr.requirement_file, pr.created_at
+=======
+    SELECT
+        pr.id,
+        p.program_name,
+        r.requirement_name,
+        pr.is_required,
+        pr.requirement_file,
+        pr.created_at
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
     FROM program_requirements pr
     INNER JOIN programs p ON pr.program_id = p.id
     INNER JOIN requirements r ON pr.requirement_id = r.id
@@ -389,6 +415,35 @@ document.getElementById('addForm').addEventListener('submit', function (e) {
         .finally(() => {
             btn.disabled  = false;
             btn.innerHTML = original;
+        });
+
+        document.querySelectorAll('.requirement-file-form').forEach(form => {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const button = this.querySelector('[type="submit"]');
+                const original = button.innerHTML;
+                button.disabled = true;
+                button.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Uploading...';
+
+                fetch('', { method: 'POST', body: new FormData(this) })
+                    .then(async response => {
+                        const text = await response.text();
+                        try { return JSON.parse(text); }
+                        catch { throw new Error('Invalid server response'); }
+                    })
+                    .then(data => {
+                        showToast(data.ok ? 'success' : 'error', data.message);
+                        if (data.ok) setTimeout(() => location.reload(), 900);
+                    })
+                    .catch(error => {
+                        console.error(error);
+                        showToast('error', 'The file could not be uploaded. Please try again.');
+                    })
+                    .finally(() => {
+                        button.disabled = false;
+                        button.innerHTML = original;
+                    });
+            });
         });
 });
 

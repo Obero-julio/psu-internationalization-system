@@ -142,6 +142,7 @@ switch ($page) {
 ?>
 </div>
 
+<link rel="stylesheet" href="../asset/css/admin_tables.css">
 <script src="../asset/js/dashboard.js"></script>
 </body>
 </html>

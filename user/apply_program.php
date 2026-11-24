@@ -12,7 +12,11 @@ if (!isset($pdo, $userId) || !($pdo instanceof PDO)) {
 /* =========================================================
    CONFIGURE THESE IF YOUR SCHEMA DIFFERS
    ========================================================= */
+<<<<<<< HEAD
 $APP_USER_COL = 'applicant_id';
+=======
+$APP_USER_COL = 'user_id';          // or 'applicant_id'
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 if (empty($_SESSION['csrf_token'])) {
@@ -27,11 +31,14 @@ $programId = (int)($_POST['program_id'] ?? $_GET['program_id'] ?? 0);
 $action    = (string)($_POST['action'] ?? $_GET['action'] ?? 'start');
 
 $flash = null;
+<<<<<<< HEAD
 $departmentStmt = $pdo->prepare('SELECT department, account_type FROM users WHERE id = ?');
 $departmentStmt->execute([$userId]);
 $applicant = $departmentStmt->fetch(PDO::FETCH_ASSOC) ?: [];
 $applicantDepartment = (string)($applicant['department'] ?? '');
 $applicantAccountType = (string)($applicant['account_type'] ?? '');
+=======
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_ok()) {
@@ -39,6 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($programId <= 0) {
         $flash = ['type' => 'error', 'msg' => 'Invalid program selected.'];
     } else {
+<<<<<<< HEAD
         $stmt = $pdo->prepare("
             SELECT p.id, p.program_name, p.status, p.end_date
             FROM programs p
@@ -48,6 +56,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             LIMIT 1
         ");
         $stmt->execute([$programId, $applicantDepartment, $applicantAccountType]);
+=======
+        $stmt = $pdo->prepare("SELECT id, program_name, status, end_date FROM programs WHERE id = ? LIMIT 1");
+        $stmt->execute([$programId]);
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
         $program = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$program) {
@@ -103,6 +115,7 @@ $stmt = $pdo->prepare("
            country.country_name,
            EXISTS (SELECT 1 FROM applications a WHERE a.{$APP_USER_COL} = ? AND a.program_id = p.id) AS already_applied
     FROM programs p
+<<<<<<< HEAD
     INNER JOIN users applicant ON applicant.id = ?
     LEFT JOIN countries country ON country.id = p.country_id
     WHERE p.status IN ('Active', 'Upcoming')
@@ -112,6 +125,14 @@ $stmt = $pdo->prepare("
     ORDER BY p.start_date, p.program_name
 ");
 $stmt->execute([$userId, $userId]);
+=======
+    LEFT JOIN countries country ON country.id = p.country_id
+    WHERE p.status IN ('Active', 'Upcoming')
+      AND (p.end_date IS NULL OR p.end_date >= CURDATE())
+    ORDER BY p.start_date, p.program_name
+");
+$stmt->execute([$userId]);
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 $programs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 if (!empty($_SESSION['apply_flash'])) {

@@ -117,7 +117,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 $programTypes = $pdo->query("SELECT id, category_name FROM program_category WHERE status = 'Active' ORDER BY category_name")->fetchAll(PDO::FETCH_ASSOC);
 $partners = $pdo->query("SELECT id, country_id, institution_name FROM partners WHERE status = 'Active' ORDER BY institution_name")->fetchAll(PDO::FETCH_ASSOC);
 
+<<<<<<< HEAD
 $partnerCountryIds = array_unique(array_column($partners, 'country_id'));
+=======
+// Include countries used by existing programs so their current selections remain editable.
+$programCountryIds = $pdo->query("
+    SELECT DISTINCT country_id
+    FROM programs
+    WHERE country_id IS NOT NULL
+")->fetchAll(PDO::FETCH_COLUMN);
+$partnerCountryIds = array_unique(array_merge(
+    array_column($partners, 'country_id'),
+    $programCountryIds
+));
+
+// Fetch the names of those specific countries
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 $countries = [];
 if (!empty($partnerCountryIds)) {
     $inQuery = implode(',', array_fill(0, count($partnerCountryIds), '?'));
@@ -656,6 +671,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const editBtn = e.target.closest('.edit-btn');
         const deleteBtn = e.target.closest('.delete-btn');
 
+<<<<<<< HEAD
         if (editBtn) {
             const data = JSON.parse(editBtn.dataset.program);
 
@@ -669,6 +685,36 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('edit_start').value = data.start_date;
             document.getElementById('edit_end').value = data.end_date;
             document.getElementById('edit_description').value = data.description;
+=======
+        const data = JSON.parse(editBtn.dataset.program);
+        
+        document.getElementById('edit_id').value = data.id;
+        document.getElementById('edit_program_name').value = data.program_name;
+        document.getElementById('edit_program_type').value = data.program_type;
+        const programTypeSelect = document.getElementById('edit_program_type');
+        if (![...programTypeSelect.options].some(option => option.value === data.program_type)) {
+            const option = document.createElement('option');
+            option.value = data.program_type;
+            option.textContent = data.program_type;
+            programTypeSelect.appendChild(option);
+        }
+        document.getElementById('edit_status').value = data.status;
+        document.getElementById('edit_start').value = data.start_date;
+        document.getElementById('edit_end').value = data.end_date;
+        document.getElementById('edit_description').value = data.description;
+
+        document.getElementById('edit_program_country').value = data.country_id;
+        
+        populatePartners(data.country_id, 'edit_program_partner', data.partner_id);
+        const partnerSelect = document.getElementById('edit_program_partner');
+        if (data.partner_id && ![...partnerSelect.options].some(option => option.value === String(data.partner_id))) {
+            const option = document.createElement('option');
+            option.value = data.partner_id;
+            option.textContent = data.institution_name || 'Current partner';
+            option.selected = true;
+            partnerSelect.appendChild(option);
+        }
+>>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 
             document.getElementById('edit_program_country').value = data.country_id;
             populatePartners(data.country_id, 'edit_program_partner', data.partner_id);

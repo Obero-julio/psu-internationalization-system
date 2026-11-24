@@ -79,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $page === 'login') {
                     ]);
                 }
 
-                header('Location: ../user/home.php');
+                header('Location: ../user/dashboard.php');
                 exit();
             } else {
                 $login_error = 'Your account does not have access to this portal.';
@@ -1226,7 +1226,7 @@ $pageTitle = $pageTitles[$page];
           <div class="meta-item"><div class="label">Duration</div><div class="value">${p.duration}</div></div>
           <div class="meta-item"><div class="label">Application Deadline</div><div class="value">${p.deadline}</div></div>
           <div class="meta-item"><div class="label">Country</div><div class="value">${p.country}</div></div>`;
-        document.getElementById('applyLink').href = '?page=apply_program&program_id=' + p.id;
+        document.getElementById('applyLink').href = '../user/dashboard.php?page=apply&program_id=' + p.id;
         document.getElementById('modalOverlay').classList.add('open');
       }
 
