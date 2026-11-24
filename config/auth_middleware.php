@@ -48,7 +48,6 @@ function requireRole(array $roles, string $redirect = '/public/login.php'): void
  */
 function requireStaff(): void
 {
-<<<<<<< HEAD
     requireRole([
         'admin', 'ad',
         'super admin', 'sa',
@@ -57,9 +56,6 @@ function requireStaff(): void
         'approving official',
         'bor secretary',
     ], '/public/login.php');
-=======
-    requireRole(['admin', 'ad', 'super admin', 'sa'], '/user/dashboard.php');
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 }
 
 /**

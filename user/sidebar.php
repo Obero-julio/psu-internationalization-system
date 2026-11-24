@@ -1,54 +1,15 @@
 <?php
 $currentPage = $page ?? 'home';
-<<<<<<< HEAD
-?>
-<aside class="sidebar" id="mainSidebar">
-    <div class="brand">
-        <div>
-            <strong>PSU</strong>
-            <b>Internationalization</b>
-            <small>Applicant Portal</small>
-        </div>
-    </div>
-
-    <nav class="sidebar-nav">
-        <div class="nav-section">Main</div>
-        <a href="?page=home" class="nav-link <?= $currentPage === 'home' ? 'active' : '' ?>">
-            <i class="fa-solid fa-house"></i> <span>Dashboard</span>
-        </a>
-        <a href="?page=available_programs" class="nav-link <?= in_array($currentPage, ['available_programs','program_detail']) ? 'active' : '' ?>">
-            <i class="fa-solid fa-globe"></i> <span>Available Programs</span>
-        </a>
-        <a href="?page=my_applications" class="nav-link <?= in_array($currentPage, ['my_applications','application_status','my_application_detail']) ? 'active' : '' ?>">
-            <i class="fa-regular fa-file-lines"></i> <span>My Applications</span>
-        </a>
-        <a href="?page=documents" class="nav-link <?= in_array($currentPage, ['documents','forms_requirements']) ? 'active' : '' ?>">
-            <i class="fa-solid fa-folder-open"></i> <span>Documents</span>
-        </a>
-
-        <a href="?page=mobility_schedule" class="nav-link <?= $currentPage === 'mobility_schedule' ? 'active' : '' ?>">
-            <i class="fa-regular fa-calendar-days"></i> <span>Mobility Schedule</span>
-        </a>
-        <a href="?page=notifications" class="nav-link <?= $currentPage === 'notifications' ? 'active' : '' ?>">
-            <i class="fa-regular fa-bell"></i> <span>Notifications</span>
-            <?php if (!empty($unreadCount)): ?><em><?= (int)$unreadCount ?></em><?php endif; ?>
-        </a>
-
-        <div class="nav-section">Account</div>
-        <a href="?page=profile" class="nav-link <?= $currentPage === 'profile' ? 'active' : '' ?>">
-            <i class="fa-regular fa-user"></i> <span>My Profile</span>
-        </a>
-    </nav>
-</aside>
-=======
 $navigation = [
-    'home' => ['Home', 'fa-house'],
-    'available_programs' => ['Available Programs', 'fa-graduation-cap'],
-    'my_applications' => ['My Applications', 'fa-file-lines'],
-    'documents' => ['Documents', 'fa-folder-open'],
-    'notifications' => ['Notifications', 'fa-bell'],
-    'profile' => ['Profile', 'fa-user'],
-    'settings' => ['Settings', 'fa-gear'],
+    'home' => ['Home', 'fa-house', ['home']],
+    'available_programs' => ['Available Programs', 'fa-graduation-cap', ['available_programs', 'program_detail']],
+    'my_applications' => ['My Applications', 'fa-file-lines', ['my_applications', 'application_status', 'my_application_detail']],
+    'documents' => ['Documents', 'fa-folder-open', ['documents', 'forms_requirements']],
+    'mobility_schedule' => ['Mobility Schedule', 'fa-calendar-days', ['mobility_schedule']],
+    'partner_directory' => ['Partner Directory', 'fa-building-columns', ['partner_directory']],
+    'notifications' => ['Notifications', 'fa-bell', ['notifications']],
+    'profile' => ['Profile', 'fa-user', ['profile']],
+    'settings' => ['Settings', 'fa-gear', ['settings']],
 ];
 ?>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
@@ -68,13 +29,18 @@ $navigation = [
 
     <nav aria-label="Main navigation">
         <ul class="sidebar-menu">
-            <?php foreach ($navigation as $key => [$label, $icon]): ?>
+            <?php foreach ($navigation as $key => [$label, $icon, $activePages]):
+                $isActive = in_array($currentPage, $activePages, true);
+            ?>
                 <li>
                     <a href="dashboard.php?page=<?= h($key) ?>"
-                       class="top-link <?= $currentPage === $key ? 'active' : '' ?>"
-                       <?= $currentPage === $key ? 'aria-current="page"' : '' ?>>
+                       class="top-link <?= $isActive ? 'active' : '' ?>"
+                       <?= $isActive ? 'aria-current="page"' : '' ?>>
                         <i class="fa-solid <?= h($icon) ?>" aria-hidden="true"></i>
                         <span><?= h($label) ?></span>
+                        <?php if ($key === 'notifications' && !empty($unreadCount)): ?>
+                            <em><?= (int)$unreadCount ?></em>
+                        <?php endif; ?>
                     </a>
                 </li>
             <?php endforeach; ?>
@@ -91,4 +57,3 @@ $navigation = [
         </a>
     </div>
 </aside>
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666

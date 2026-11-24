@@ -20,55 +20,29 @@ if (!function_exists('h')) {
 }
 
 /* =========================
-<<<<<<< HEAD
    HANDLE AJAX MARK AS READ
    ========================= */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
-    $action = $_POST['action'];
-    
-    // Basic CSRF check
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
+    $action = is_string($_POST['action']) ? $_POST['action'] : '';
+    $sentToken = $_POST['csrf_token'] ?? '';
+    $sessionToken = $_SESSION['csrf_token'] ?? '';
+    if (!is_string($sentToken) || !is_string($sessionToken) || $sessionToken === '' || !hash_equals($sessionToken, $sentToken)) {
+        http_response_code(403);
         echo json_encode(['success' => false, 'message' => 'Invalid session token.']);
         exit;
     }
-=======
-   FETCH NOTIFICATIONS
-   Only what the applicant should see:
-     - admin applications updates (approved/rejected)
-     - admin announcements
-     - document reminders
-========================= */
-$stmt = $pdo->prepare("
-    SELECT id, type, title, message, is_read, created_at
-    FROM notifications
-    WHERE user_id = ?
-      AND type IN ('application', 'approval', 'rejected', 'document', 'reminder', 'announcement')
-    ORDER BY created_at DESC
-    LIMIT 50
-");
-$stmt->execute([$userId]);
-$notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-/* =========================
-   COUNTS
-========================= */
-$totalCount  = count($notifications);
-$unreadCount = 0;
-$typeCounts  = [
-    'application'  => 0,
-    'approval'     => 0,
-    'rejected'     => 0,
-    'document'     => 0,
-    'reminder'     => 0,
-    'announcement' => 0,
-];
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 
     try {
         if ($action === 'mark_read' && isset($_POST['id'])) {
+            $notificationId = (int)$_POST['id'];
+            if ($notificationId <= 0) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Invalid notification.']);
+                exit;
+            }
             $stmt = $pdo->prepare("UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?");
-            $stmt->execute([(int)$_POST['id'], $userId]);
+            $stmt->execute([$notificationId, $userId]);
             echo json_encode(['success' => true]);
             exit;
         } 
@@ -85,7 +59,6 @@ $typeCounts  = [
     }
 }
 
-<<<<<<< HEAD
 /* =========================
    FETCH NOTIFICATIONS
    ========================= */
@@ -118,17 +91,6 @@ $typeMap = [
     'reminder'     => ['fa-clock',           'Travel Reminder',      'reminder'],
     'announcement' => ['fa-bullhorn',        'Announcement',         'announcement'],
     'default'      => ['fa-bell',            'Notification',         ''],
-=======
-/* ICON MAP */
-$typeMap = [
-    'application'  => ['ti-clipboard-check',   'Application Update',   ''],
-    'approval'     => ['ti-check',             'Approved',             'approval'],
-    'rejected'     => ['ti-x',                 'Rejected',             'rejected'],
-    'document'     => ['ti-file-alert',        'Document Requirement', ''],
-    'reminder'     => ['ti-alarm',             'Travel Reminder',      'reminder'],
-    'announcement' => ['ti-speakerphone',      'Announcement',         'announcement'],
-    'default'      => ['ti-bell',              'Notification',         ''],
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 ];
 
 $tagLabels = [
@@ -380,6 +342,26 @@ $tagLabels = [
         font-size: 0.95rem; 
     }
 
+    .toast {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 20px;
+        border-radius: var(--radius-sm);
+        color: #fff;
+        background: var(--psu-navy);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, .2);
+        opacity: 0;
+        transform: translateY(12px);
+        transition: opacity .25s ease, transform .25s ease;
+    }
+    .toast--show { opacity: 1; transform: translateY(0); }
+    .toast--error { background: #b91c1c; }
+
     @media (max-width: 640px) {
         .notif-page-header {
             flex-direction: column;
@@ -401,7 +383,6 @@ $tagLabels = [
                 <p>Stay informed about important updates, alerts, and activities.</p>
             </div>
         </div>
-<<<<<<< HEAD
         <button class="btn-mark-all" id="markAllBtn" onclick="markAllRead()" <?= $unreadCount === 0 ? 'disabled' : '' ?>>
             <i class="fa-solid fa-check-double"></i> Mark all read
         </button>
@@ -418,98 +399,13 @@ $tagLabels = [
             <button class="notif-filter-btn" data-filter="<?= $key ?>" onclick="filter('<?= $key ?>', this)">
                 <?= $label ?> <span class="filter-count"><?= $typeCounts[$key] ?></span>
             </button>
-=======
-
-        <button class="btn-mark-all" id="markAllBtn"
-                onclick="markAllRead()"
-                <?= $unreadCount === 0 ? 'disabled' : '' ?>>
-            <i class="ti ti-checks"></i> Mark all as read
-        </button>
-    </div>
-
-    <div class="notification-filters">
-        <button class="active" data-filter="all" onclick="filter('all', this)">
-            <i class="ti ti-layout-grid"></i> All
-            <span class="filter-count"><?= $totalCount ?></span>
-        </button>
-        <button data-filter="unread" onclick="filter('unread', this)">
-            <i class="ti ti-mail"></i> Unread
-            <span class="filter-count"><?= $unreadCount ?></span>
-        </button>
-        <button data-filter="application" onclick="filter('application', this)">
-            <i class="ti ti-file-description"></i> Applications
-            <span class="filter-count"><?= $typeCounts['application'] ?></span>
-        </button>
-        <button data-filter="approval" onclick="filter('approval', this)">
-            <i class="ti ti-circle-check"></i> Approved
-            <span class="filter-count"><?= $typeCounts['approval'] ?></span>
-        </button>
-        <button data-filter="rejected" onclick="filter('rejected', this)">
-            <i class="ti ti-circle-x"></i> Rejected
-            <span class="filter-count"><?= $typeCounts['rejected'] ?></span>
-        </button>
-        <button data-filter="document" onclick="filter('document', this)">
-            <i class="ti ti-file-alert"></i> Documents
-            <span class="filter-count"><?= $typeCounts['document'] ?></span>
-        </button>
-        <button data-filter="reminder" onclick="filter('reminder', this)">
-            <i class="ti ti-bell"></i> Reminders
-            <span class="filter-count"><?= $typeCounts['reminder'] ?></span>
-        </button>
-        <button data-filter="announcement" onclick="filter('announcement', this)">
-            <i class="ti ti-speakerphone"></i> Announcements
-            <span class="filter-count"><?= $typeCounts['announcement'] ?></span>
-        </button>
-    </div>
-
-    <div class="notification-toolbar">
-        <button class="notification-sort" id="sortBtn" onclick="toggleSort()">
-            <i class="ti ti-arrows-sort"></i> <span id="sortLabel">Latest first</span>
-        </button>
-        <button class="notification-toolbar-icon-btn" title="View options">
-            <i class="ti ti-adjustments-horizontal"></i>
-        </button>
-    </div>
-
-    <div class="notification-list" id="notificationList">
-
-    <?php if (!empty($notifications)): ?>
-        <?php foreach ($notifications as $n):
-            $map      = $typeMap[$n['type']] ?? $typeMap['default'];
-            $icon     = $map[0];
-            $mod      = $map[2];
-            $tagLabel = $tagLabels[$n['type']] ?? 'Notification';
-            $isUnread = !$n['is_read'];
-        ?>
-        <div class="notification-item <?= $isUnread ? 'unread' : '' ?>"
-             data-id="<?= (int)$n['id'] ?>"
-             data-type="<?= h($n['type']) ?>"
-             data-read="<?= $isUnread ? 'unread' : 'read' ?>"
-             data-time="<?= (int)strtotime($n['created_at']) ?>"
-             onclick="markRead(this)">
-
-            <div class="notification-icon <?= $mod ? 'icon-' . h($mod) : '' ?>">
-                <i class="ti <?= h($icon) ?>"></i>
-            </div>
-
-            <div class="notification-content">
-                <div class="notification-title"><?= h($n['title']) ?></div>
-                <div class="notification-message"><?= h($n['message']) ?></div>
-                <div class="notification-tag <?= $mod ? 'tag-' . h($mod) : '' ?>">
-                    <?= h($tagLabel) ?>
-                </div>
-            </div>
-
-            <div class="notification-meta">
-                <span class="notification-time">
-                    <?= date('M d, Y g:i A', strtotime($n['created_at'])) ?>
-                </span>
-                <span class="notification-status-dot"></span>
-            </div>
-
-        </div>
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
         <?php endforeach; ?>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; margin-bottom:16px;">
+        <button class="btn-mark-all" type="button" id="sortBtn" onclick="toggleSort()">
+            <i class="fa-solid fa-arrow-down-wide-short"></i> <span id="sortLabel">Latest first</span>
+        </button>
     </div>
 
     <div class="notif-list" id="notifList">
@@ -525,6 +421,7 @@ $tagLabels = [
                  data-id="<?= (int)$n['id'] ?>"
                  data-type="<?= h($n['type']) ?>"
                  data-read="<?= $isUnread ? 'unread' : 'read' ?>"
+                 data-time="<?= (int)strtotime($n['created_at']) ?>"
                  onclick="markRead(this)">
                  
                 <div class="notif-icon <?= $mod ? 'icon-' . h($mod) : '' ?>">
@@ -551,11 +448,6 @@ $tagLabels = [
             </div>
         <?php endif; ?>
     </div>
-<<<<<<< HEAD
-=======
-
-</div>
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 </div>
 
 <script>
@@ -564,7 +456,6 @@ $tagLabels = [
     function markRead(el) {
         if (el.dataset.read === 'read') return;
 
-<<<<<<< HEAD
         const formData = new FormData();
         formData.append('action', 'mark_read');
         formData.append('id', el.dataset.id);
@@ -577,9 +468,11 @@ $tagLabels = [
                     el.classList.remove('unread');
                     el.dataset.read = 'read';
                     updateCounts();
+                } else {
+                    showToast('error', res.message || 'Could not mark notification as read.');
                 }
             })
-            .catch(() => alert('Error marking notification as read.'));
+            .catch(() => showToast('error', 'Could not reach the server.'));
     }
 
     function markAllRead() {
@@ -596,9 +489,12 @@ $tagLabels = [
                         el.dataset.read = 'read';
                     });
                     updateCounts();
+                    showToast('success', 'All notifications marked as read.');
+                } else {
+                    showToast('error', res.message || 'Could not mark notifications as read.');
                 }
             })
-            .catch(() => alert('Error marking all as read.'));
+            .catch(() => showToast('error', 'Could not reach the server.'));
     }
 
     function updateCounts() {
@@ -609,75 +505,6 @@ $tagLabels = [
             if (el.dataset.read === 'unread') counts.unread++;
             counts[el.dataset.type] = (counts[el.dataset.type] || 0) + 1;
         });
-=======
-    fetch(window.NOTIF_CONFIG.baseUrl + '/markread.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: el.dataset.id, csrf_token: window.NOTIF_CONFIG.csrf })
-    })
-    .then(async res => {
-        const text = await res.text();
-        try { return JSON.parse(text); }
-        catch { throw new Error('Server did not return JSON'); }
-    })
-    .then(res => {
-        if (res.success) {
-            el.classList.remove('unread');
-            el.dataset.read = 'read';
-            updateCounts();
-        } else {
-            showToast('error', res.message || 'Could not mark notification.');
-        }
-    })
-    .catch(() => showToast('error', 'Could not reach the server.'));
-}
-
-/* ── Mark all as read ── */
-function markAllRead() {
-    fetch(window.NOTIF_CONFIG.baseUrl + '/markallread.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csrf_token: window.NOTIF_CONFIG.csrf })
-    })
-    .then(async res => {
-        const text = await res.text();
-        try { return JSON.parse(text); }
-        catch { throw new Error('Server did not return JSON'); }
-    })
-    .then(res => {
-        if (res.success) {
-            document.querySelectorAll('.notification-item').forEach(el => {
-                el.classList.remove('unread');
-                el.dataset.read = 'read';
-            });
-            updateCounts();
-            showToast('success', 'All notifications marked as read.');
-        } else {
-            showToast('error', res.message || 'Could not mark all notifications.');
-        }
-    })
-    .catch(() => showToast('error', 'Could not reach the server.'));
-}
-
-/* ── Rebuild filter counts from the DOM (including every type) ── */
-function updateCounts() {
-    const items = document.querySelectorAll('.notification-item');
-    const counts = { all: items.length, unread: 0 };
-
-    items.forEach(el => {
-        const t = el.dataset.type;
-        if (el.dataset.read === 'unread') counts.unread++;
-        counts[t] = (counts[t] || 0) + 1;
-    });
-
-    document.querySelectorAll('.notification-filters button').forEach(btn => {
-        const key = btn.dataset.filter;
-        const span = btn.querySelector('.filter-count');
-        if (!span) return;
-        if (counts[key] !== undefined) span.textContent = counts[key];
-    });
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
-
         document.querySelectorAll('.notif-filter-btn').forEach(btn => {
             const key = btn.dataset.filter;
             const span = btn.querySelector('.filter-count');
@@ -686,22 +513,9 @@ function updateCounts() {
             }
         });
 
-<<<<<<< HEAD
         const markAllBtn = document.getElementById('markAllBtn');
         if (markAllBtn) markAllBtn.disabled = counts.unread === 0;
     }
-=======
-/* ── Filter (uses single active state, works with any new type) ── */
-function filter(type, btn) {
-    document.querySelectorAll('.notification-item').forEach(el => {
-        let show = false;
-        if (type === 'all')         show = true;
-        else if (type === 'unread') show = el.dataset.read === 'unread';
-        else                        show = el.dataset.type === type;
-        el.style.display = show ? '' : 'none';
-    });
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
-
     function filter(type, btn) {
         document.querySelectorAll('.notif-item').forEach(el => {
             let show = false;
@@ -711,19 +525,20 @@ function filter(type, btn) {
             el.style.display = show ? '' : 'none';
         });
 
-<<<<<<< HEAD
         document.querySelectorAll('.notif-filter-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
     }
-=======
+
+let sortAscending = false;
+
 /* ── Sort ── */
 function toggleSort() {
     sortAscending = !sortAscending;
     document.getElementById('sortLabel').textContent =
         sortAscending ? 'Oldest first' : 'Latest first';
 
-    const list  = document.getElementById('notificationList');
-    const items = Array.from(list.querySelectorAll('.notification-item'));
+    const list  = document.getElementById('notifList');
+    const items = Array.from(list.querySelectorAll('.notif-item'));
 
     items.sort((a, b) => {
         const diff = Number(a.dataset.time) - Number(b.dataset.time);
@@ -754,10 +569,4 @@ function showToast(type, message) {
         setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
-
-window.NOTIF_CONFIG = {
-    baseUrl: '.',
-    csrf: <?= json_encode($_SESSION['csrf_token'] ?? '') ?>
-};
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 </script>

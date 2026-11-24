@@ -62,15 +62,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         exit();
     }
 
-<<<<<<< HEAD
-    $requirementStmt = $pdo->prepare("SELECT requirement_file FROM program_requirements WHERE id = ?");
-=======
     $requirementStmt = $pdo->prepare("
         SELECT requirement_file
         FROM program_requirements
         WHERE id = ?
     ");
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
     $requirementStmt->execute([$programRequirementId]);
     $oldFilePath = $requirementStmt->fetchColumn();
 
@@ -109,15 +105,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     }
 
     try {
-<<<<<<< HEAD
-        $updateStmt = $pdo->prepare("UPDATE program_requirements SET requirement_file = ? WHERE id = ?");
-=======
         $updateStmt = $pdo->prepare("
             UPDATE program_requirements
             SET requirement_file = ?
             WHERE id = ?
         ");
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
         $updateStmt->execute([$relativePath, $programRequirementId]);
     } catch (PDOException $e) {
         unlink($destination);
@@ -184,9 +176,6 @@ $totalCount = (int)$pdo->query("SELECT COUNT(*) FROM program_requirements")->fet
 $totalPages = max(1, ceil($totalCount / $limit));
 
 $stmt = $pdo->prepare("
-<<<<<<< HEAD
-    SELECT pr.id, p.program_name, r.requirement_name, pr.is_required, pr.requirement_file, pr.created_at
-=======
     SELECT
         pr.id,
         p.program_name,
@@ -194,7 +183,6 @@ $stmt = $pdo->prepare("
         pr.is_required,
         pr.requirement_file,
         pr.created_at
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
     FROM program_requirements pr
     INNER JOIN programs p ON pr.program_id = p.id
     INNER JOIN requirements r ON pr.requirement_id = r.id

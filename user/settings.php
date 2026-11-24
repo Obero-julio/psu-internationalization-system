@@ -1,38 +1,25 @@
 <?php
-<<<<<<< HEAD
-=======
 $message = '';
 $messageType = '';
 
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 if (!isset($pdo, $userId) || !($pdo instanceof PDO)) {
     header('Location: dashboard.php?page=settings');
     exit;
 }
 
-<<<<<<< HEAD
 $message = '';
 $messageType = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $current = is_string($_POST['current_password'] ?? null) ? $_POST['current_password'] : '';
-    $new     = is_string($_POST['new_password'] ?? null) ? $_POST['new_password'] : '';
-=======
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $current = is_string($_POST['current_password'] ?? null) ? $_POST['current_password'] : '';
     $new = is_string($_POST['new_password'] ?? null) ? $_POST['new_password'] : '';
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
     $confirm = is_string($_POST['confirm_password'] ?? null) ? $_POST['confirm_password'] : '';
 
     if (!checkCsrf()) {
         $message = 'Your session expired. Please refresh the page and try again.';
         $messageType = 'error';
     } elseif ($current === '' || $new === '' || $confirm === '') {
-<<<<<<< HEAD
         $message = 'Please complete all password fields.';
-=======
-        $message = 'Complete all password fields.';
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
         $messageType = 'error';
     } else {
         $stmt = $pdo->prepare('SELECT password_hash FROM users WHERE id = ?');
@@ -40,7 +27,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $hash = $stmt->fetchColumn();
 
         if (!is_string($hash) || !password_verify($current, $hash)) {
-<<<<<<< HEAD
             $message = 'Your current password is incorrect.';
             $messageType = 'error';
         } elseif (strlen($new) < 8) {
@@ -48,31 +34,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageType = 'error';
         } elseif ($new !== $confirm) {
             $message = 'New passwords do not match.';
-=======
-            $message = 'Current password is incorrect.';
-            $messageType = 'error';
-        } elseif (strlen($new) < 8) {
-            $message = 'New password must be at least 8 characters.';
-            $messageType = 'error';
-        } elseif ($new !== $confirm) {
-            $message = 'Passwords do not match.';
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
             $messageType = 'error';
         } else {
             $stmt = $pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
             $stmt->execute([password_hash($new, PASSWORD_DEFAULT), $userId]);
-<<<<<<< HEAD
             $message = 'Your password has been updated successfully!';
-=======
-            $message = 'Password updated.';
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
             $messageType = 'success';
         }
     }
 }
 ?>
 
-<<<<<<< HEAD
 <style>
     /* =====================================================
        SECURITY SETTINGS STYLES (Matched to Auth Pages)
@@ -282,32 +254,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 </script>
-=======
-<section class="content-card" aria-labelledby="settings-title">
-    <div class="page-header">
-        <div><h2 id="settings-title">Settings</h2><p>Change your password.</p></div>
-    </div>
-    <?php if ($message): ?>
-        <div class="alert alert-<?= h($messageType) ?>" role="<?= $messageType === 'success' ? 'status' : 'alert' ?>">
-            <?= h($message) ?>
-        </div>
-    <?php endif; ?>
-    <form method="post" class="apply-form">
-        <input type="hidden" name="csrf_token" value="<?= h($_SESSION['csrf_token']) ?>">
-        <div class="form-grid">
-            <label for="current-password">Current Password
-                <input id="current-password" type="password" name="current_password" autocomplete="current-password" required>
-            </label>
-            <label for="new-password">New Password
-                <input id="new-password" type="password" name="new_password" autocomplete="new-password" minlength="8" required>
-            </label>
-            <label for="confirm-password">Confirm New Password
-                <input id="confirm-password" type="password" name="confirm_password" autocomplete="new-password" minlength="8" required>
-            </label>
-        </div>
-        <div class="form-actions">
-            <button type="submit" class="btn-primary">Update Password</button>
-        </div>
-    </form>
-</section>
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666

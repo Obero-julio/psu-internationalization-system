@@ -12,11 +12,7 @@ if (!isset($pdo, $userId) || !($pdo instanceof PDO)) {
 /* =========================================================
    CONFIGURE THESE IF YOUR SCHEMA DIFFERS
    ========================================================= */
-<<<<<<< HEAD
 $APP_USER_COL = 'applicant_id';
-=======
-$APP_USER_COL = 'user_id';          // or 'applicant_id'
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 if (empty($_SESSION['csrf_token'])) {
@@ -29,37 +25,36 @@ function csrf_ok(): bool {
 
 $programId = (int)($_POST['program_id'] ?? $_GET['program_id'] ?? 0);
 $action    = (string)($_POST['action'] ?? $_GET['action'] ?? 'start');
+$mobilityType = is_string($_POST['mobility_type'] ?? null)
+    ? trim($_POST['mobility_type'])
+    : '';
 
 $flash = null;
-<<<<<<< HEAD
 $departmentStmt = $pdo->prepare('SELECT department, account_type FROM users WHERE id = ?');
 $departmentStmt->execute([$userId]);
 $applicant = $departmentStmt->fetch(PDO::FETCH_ASSOC) ?: [];
 $applicantDepartment = (string)($applicant['department'] ?? '');
 $applicantAccountType = (string)($applicant['account_type'] ?? '');
-=======
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_ok()) {
         $flash = ['type' => 'error', 'msg' => 'Session expired. Please try again.'];
     } elseif ($programId <= 0) {
         $flash = ['type' => 'error', 'msg' => 'Invalid program selected.'];
+    } elseif ($action !== 'cancel' && !in_array($mobilityType, ['Inbound', 'Outbound'], true)) {
+        $flash = ['type' => 'error', 'msg' => 'Select a valid mobility type.'];
+    } elseif ($action !== 'cancel' && ($_POST['confirm'] ?? '') !== '1') {
+        $flash = ['type' => 'error', 'msg' => 'Confirm the application details before submitting.'];
     } else {
-<<<<<<< HEAD
         $stmt = $pdo->prepare("
             SELECT p.id, p.program_name, p.status, p.end_date
             FROM programs p
             WHERE p.id = ?
-              AND p.eligible_department IN ('All Departments', ?)
+              AND (p.eligible_department = 'All Departments' OR p.eligible_department = ?)
               AND p.eligible_account_type = ?
             LIMIT 1
         ");
         $stmt->execute([$programId, $applicantDepartment, $applicantAccountType]);
-=======
-        $stmt = $pdo->prepare("SELECT id, program_name, status, end_date FROM programs WHERE id = ? LIMIT 1");
-        $stmt->execute([$programId]);
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
         $program = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$program) {
@@ -96,11 +91,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             try {
-                $ins = $pdo->prepare("INSERT INTO applications ({$APP_USER_COL}, program_id, status, created_at) VALUES (?, ?, 'draft', NOW())");
-                $ins->execute([$userId, $programId]);
+                $ins = $pdo->prepare("INSERT INTO applications ({$APP_USER_COL}, program_id, mobility_type, status, created_at) VALUES (?, ?, ?, 'submitted', NOW())");
+                $ins->execute([$userId, $programId, $mobilityType]);
                 $newId = (int)$pdo->lastInsertId();
-                $_SESSION['apply_flash'] = ['type' => 'success', 'msg' => 'Application started. Fill in your details.'];
-                header('Location: ?page=apply&program_id=' . $programId . '&id=' . $newId);
+                $_SESSION['apply_flash'] = ['type' => 'success', 'msg' => 'Application submitted successfully.'];
+                header('Location: ?page=my_application_detail&id=' . $newId);
                 exit;
             } catch (PDOException $e) {
                 error_log('apply_program insert: ' . $e->getMessage());
@@ -115,7 +110,6 @@ $stmt = $pdo->prepare("
            country.country_name,
            EXISTS (SELECT 1 FROM applications a WHERE a.{$APP_USER_COL} = ? AND a.program_id = p.id) AS already_applied
     FROM programs p
-<<<<<<< HEAD
     INNER JOIN users applicant ON applicant.id = ?
     LEFT JOIN countries country ON country.id = p.country_id
     WHERE p.status IN ('Active', 'Upcoming')
@@ -125,14 +119,6 @@ $stmt = $pdo->prepare("
     ORDER BY p.start_date, p.program_name
 ");
 $stmt->execute([$userId, $userId]);
-=======
-    LEFT JOIN countries country ON country.id = p.country_id
-    WHERE p.status IN ('Active', 'Upcoming')
-      AND (p.end_date IS NULL OR p.end_date >= CURDATE())
-    ORDER BY p.start_date, p.program_name
-");
-$stmt->execute([$userId]);
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 $programs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 if (!empty($_SESSION['apply_flash'])) {
@@ -190,6 +176,18 @@ if (!empty($_SESSION['apply_flash'])) {
                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
                             <input type="hidden" name="program_id" value="<?= (int)$p['id'] ?>">
                             <input type="hidden" name="action" value="start">
+                            <label>
+                                Mobility type
+                                <select name="mobility_type" required>
+                                    <option value="">Select type</option>
+                                    <option value="Inbound">Inbound</option>
+                                    <option value="Outbound">Outbound</option>
+                                </select>
+                            </label>
+                            <label>
+                                <input type="checkbox" name="confirm" value="1" required>
+                                Confirm details
+                            </label>
                             <button type="submit" class="btn-primary">Apply now →</button>
                         </form>
                     <?php endif; ?>

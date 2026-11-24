@@ -7,35 +7,9 @@
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
-<<<<<<< HEAD
-CREATE TABLE users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    first_name VARCHAR(100) NOT NULL,
-    middle_name VARCHAR(100) DEFAULT NULL,
-    last_name VARCHAR(100) NOT NULL,
-    suffix VARCHAR(20) DEFAULT NULL,
-    student_id_number VARCHAR(30) DEFAULT NULL,
-    department VARCHAR(100) DEFAULT NULL,
-    account_type ENUM('Student', 'Faculty') NOT NULL DEFAULT 'Student',
-    birthdate DATE DEFAULT NULL,
-    sex ENUM('Male', 'Female', 'Prefer not to say') DEFAULT NULL,
-    program VARCHAR(150) DEFAULT NULL,
-    year_level VARCHAR(50) DEFAULT NULL,
-    faculty_rank VARCHAR(100) DEFAULT NULL,
-    year_level VARCHAR(50) DEFAULT NULL,
-    faculty_rank VARCHAR(100) DEFAULT NULL,
-    email VARCHAR(150) NOT NULL UNIQUE,
-    contact VARCHAR(20) DEFAULT NULL,
-    user_role ENUM('super admin', 'admin', 'applicant', 'faculty', 'campus coordinator', 'ovplia staff', 'approving official', 'bor secretary') DEFAULT 'applicant',
-    status ENUM('active', 'inactive') DEFAULT 'active',
-    password_hash VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-=======
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
@@ -82,20 +56,9 @@ CREATE TABLE `agreement_types` (
 -- Dumping data for table `agreement_types`
 --
 
-<<<<<<< HEAD
-id INT AUTO_INCREMENT PRIMARY KEY,
-program_name VARCHAR(150) NOT NULL,
-program_type VARCHAR(100) NOT NULL,
-eligible_department VARCHAR(100) NOT NULL DEFAULT 'All Departments',
-eligible_account_type ENUM('Student', 'Faculty') NOT NULL DEFAULT 'Student',
-country_id INT,
-partner_id INT,
-agreement_type_id INT,
-=======
 INSERT INTO `agreement_types` (`id`, `agreement_name`, `description`, `status`, `created_at`) VALUES
 (1, 'IO', 'Institutional Order', 'Active', '2026-11-06 17:17:41'),
 (3, 'Mou', 'Memorandum of Understanding', 'Active', '2026-11-06 17:17:41');
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 
 -- --------------------------------------------------------
 
@@ -128,6 +91,7 @@ CREATE TABLE `applications` (
   `school_year` varchar(20) DEFAULT NULL,
   `institution` varchar(150) DEFAULT NULL,
   `country` varchar(100) DEFAULT NULL,
+  `reason` varchar(500) DEFAULT NULL,
   `status` enum('submitted','under_review','approved','rejected','completed') DEFAULT 'submitted',
   `documents_status` enum('pending','complete','incomplete') DEFAULT 'pending',
   `notes` text DEFAULT NULL,
@@ -149,7 +113,7 @@ CREATE TRIGGER `notify_admin_new_application` AFTER INSERT ON `applications` FOR
     SELECT CONCAT(first_name, ' ', last_name) INTO v_user_name FROM users WHERE id = NEW.applicant_id;
     
     INSERT INTO `notifications` (`user_id`, `type`, `title`, `message`)
-    SELECT `id`, 'system_alert', 'New Application Received', CONCAT(v_user_name, ' submitted an application for ', IFNULL(v_program_name, 'a program'), '.')
+    SELECT `id`, 'system', 'New Application Received', CONCAT(v_user_name, ' submitted an application for ', IFNULL(v_program_name, 'a program'), '.')
     FROM `users` 
     WHERE `user_role` IN ('admin', 'super admin');
 END
@@ -177,7 +141,16 @@ CREATE TRIGGER `notify_user_status_change` AFTER UPDATE ON `applications` FOR EA
         
         IF v_title IS NOT NULL THEN
             INSERT INTO `notifications` (`user_id`, `type`, `title`, `message`)
-            VALUES (NEW.applicant_id, NEW.status, v_title, v_message);
+            VALUES (
+                NEW.applicant_id,
+                CASE
+                    WHEN NEW.status = 'approved' THEN 'approval'
+                    WHEN NEW.status = 'rejected' THEN 'rejected'
+                    ELSE 'application'
+                END,
+                v_title,
+                v_message
+            );
         END IF;
     END IF;
 END
@@ -186,73 +159,6 @@ DELIMITER ;
 
 -- --------------------------------------------------------
 
-<<<<<<< HEAD
-CREATE TABLE program_requirements (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    program_id INT NOT NULL,
-    requirement_id INT NOT NULL,
-    is_required BOOLEAN DEFAULT TRUE,
-    form_id INT NULL,
-    requirement_file VARCHAR(255) NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_program_requirements_program
-        FOREIGN KEY (program_id)
-        REFERENCES programs(id)
-        ON DELETE CASCADE,
-    CONSTRAINT fk_program_requirements_requirement
-        FOREIGN KEY (requirement_id)
-        REFERENCES requirements(id)
-        ON DELETE CASCADE,
-    CONSTRAINT fk_program_requirements_form
-        FOREIGN KEY (form_id)
-        REFERENCES forms(id)
-        ON DELETE SET NULL
-);
-
-CREATE TABLE user_documents (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    requirement_id INT NOT NULL,
-    file_path VARCHAR(255) NOT NULL,
-    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_user_document (user_id, requirement_id),
-    CONSTRAINT fk_user_documents_user
-        FOREIGN KEY (user_id)
-        REFERENCES users(id)
-        ON DELETE CASCADE,
-    CONSTRAINT fk_user_documents_requirement
-        FOREIGN KEY (requirement_id)
-        REFERENCES program_requirements(id)
-        ON DELETE CASCADE
-) ENGINE=InnoDB;
-
-CREATE TABLE applications (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    applicant_id INT NOT NULL,
-    program_id INT NULL,
-    reason VARCHAR(500) NULL,
-    department VARCHAR(100),
-    mobility_type ENUM('Inbound','Outbound') NOT NULL,
-    institution VARCHAR(150),
-    country VARCHAR(100),
-    status ENUM(
-        'submitted',
-        'under_review',
-        'approved',
-        'rejected',
-        'completed'
-    ) DEFAULT 'submitted',
-    documents_status ENUM(
-        'pending',
-        'complete',
-        'incomplete'
-    ) DEFAULT 'pending',
-    reviewed_at DATETIME NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ON UPDATE CURRENT_TIMESTAMP,
-=======
 --
 -- Table structure for table `audit_trail`
 --
@@ -270,7 +176,6 @@ CREATE TABLE `audit_trail` (
 --
 -- Table structure for table `countries`
 --
->>>>>>> d3584a4a544d2d7e792870691aa98d25b9cb5666
 
 CREATE TABLE `countries` (
   `id` int(11) NOT NULL,
@@ -435,14 +340,14 @@ CREATE TABLE `notifications` (
 --
 
 INSERT INTO `notifications` (`id`, `user_id`, `type`, `title`, `message`, `is_read`, `created_at`) VALUES
-(1, 2, '', 'New Application Received', 'Julio Obero submitted an application for IZN Exchange Student 2026.', 1, '2026-11-06 17:17:41'),
-(2, 4, '', 'Application Approved', 'Congratulations! Your application for IZN Exchange Student 2026 has been approved.', 1, '2026-11-06 17:17:41'),
-(3, 2, '', 'New Application Received', 'Julio Obero submitted an application for sddf.', 1, '2026-11-07 15:12:28'),
-(4, 3, '', 'New Application Received', 'Julio Obero submitted an application for sddf.', 1, '2026-11-07 15:12:28'),
-(5, 7, '', 'New Application Received', 'Julio Obero submitted an application for sddf.', 0, '2026-11-07 15:12:28'),
-(6, 2, '', 'New Application Received', 'Julio Obero submitted an application for IZN Exchange Student 2028.', 1, '2026-11-07 16:56:16'),
-(7, 3, '', 'New Application Received', 'Julio Obero submitted an application for IZN Exchange Student 2028.', 1, '2026-11-07 16:56:16'),
-(8, 7, '', 'New Application Received', 'Julio Obero submitted an application for IZN Exchange Student 2028.', 0, '2026-11-07 16:56:16'),
+(1, 2, 'system', 'New Application Received', 'Julio Obero submitted an application for IZN Exchange Student 2026.', 1, '2026-11-06 17:17:41'),
+(2, 4, 'approval', 'Application Approved', 'Congratulations! Your application for IZN Exchange Student 2026 has been approved.', 1, '2026-11-06 17:17:41'),
+(3, 2, 'system', 'New Application Received', 'Julio Obero submitted an application for sddf.', 1, '2026-11-07 15:12:28'),
+(4, 3, 'system', 'New Application Received', 'Julio Obero submitted an application for sddf.', 1, '2026-11-07 15:12:28'),
+(5, 7, 'system', 'New Application Received', 'Julio Obero submitted an application for sddf.', 0, '2026-11-07 15:12:28'),
+(6, 2, 'system', 'New Application Received', 'Julio Obero submitted an application for IZN Exchange Student 2028.', 1, '2026-11-07 16:56:16'),
+(7, 3, 'system', 'New Application Received', 'Julio Obero submitted an application for IZN Exchange Student 2028.', 1, '2026-11-07 16:56:16'),
+(8, 7, 'system', 'New Application Received', 'Julio Obero submitted an application for IZN Exchange Student 2028.', 0, '2026-11-07 16:56:16'),
 (9, 4, 'rejected', 'Application Rejected', 'We regret to inform you that your application for sddf was not approved. Please review the details provided by the Internationalization Office.', 1, '2026-11-09 05:46:39'),
 (10, 4, 'rejected', 'Application Rejected', 'We regret to inform you that your application for IZN Exchange Student 2026 was not approved. Please review the details provided by the Internationalization Office.', 1, '2026-11-10 14:02:51'),
 (11, 4, 'rejected', 'Application Rejected', 'We regret to inform you that your application for IZN Exchange Student 2028 was not approved. Please review the details provided by the Internationalization Office.', 1, '2026-11-10 14:40:54');
@@ -503,6 +408,8 @@ CREATE TABLE `programs` (
   `program_name` varchar(150) NOT NULL,
   `category_id` int(11) DEFAULT NULL,
   `program_type` varchar(100) NOT NULL,
+  `eligible_department` varchar(100) NOT NULL DEFAULT 'All Departments',
+  `eligible_account_type` enum('Student','Faculty') NOT NULL DEFAULT 'Student',
   `country_id` int(11) DEFAULT NULL,
   `partner_id` int(11) DEFAULT NULL,
   `agreement_type_id` int(11) DEFAULT NULL,
@@ -554,6 +461,7 @@ CREATE TABLE `program_requirements` (
   `program_id` int(11) NOT NULL,
   `requirement_id` int(11) NOT NULL,
   `is_required` tinyint(1) DEFAULT 1,
+  `form_id` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `requirement_file` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -670,6 +578,7 @@ CREATE TABLE `travel_information` (
   `arrival_date` date NOT NULL,
   `arrival_time` time NOT NULL,
   `arrival_airport` varchar(150) NOT NULL,
+  `travel_status` enum('pending','traveling','completed','rejected') NOT NULL DEFAULT 'pending',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -688,12 +597,16 @@ CREATE TABLE `users` (
   `suffix` varchar(20) DEFAULT NULL,
   `student_id_number` varchar(30) DEFAULT NULL,
   `employee_id_number` varchar(30) DEFAULT NULL,
+  `year_level` varchar(50) DEFAULT NULL,
+  `faculty_rank` varchar(100) DEFAULT NULL,
   `birthdate` date DEFAULT NULL,
   `sex` enum('Male','Female','Prefer not to say') DEFAULT NULL,
   `program` varchar(150) DEFAULT NULL,
+  `department` varchar(100) DEFAULT NULL,
+  `account_type` enum('Student','Faculty') NOT NULL DEFAULT 'Student',
   `email` varchar(150) NOT NULL,
   `contact` varchar(20) DEFAULT NULL,
-  `user_role` enum('super admin','admin','applicant','faculty') DEFAULT 'applicant',
+  `user_role` enum('super admin','admin','applicant','faculty','campus coordinator','ovplia staff','approving official','bor secretary') DEFAULT 'applicant',
   `status` enum('active','inactive') DEFAULT 'active',
   `password_hash` varchar(255) NOT NULL,
   `reset_token` varchar(64) DEFAULT NULL,
@@ -861,7 +774,8 @@ ALTER TABLE `program_category`
 ALTER TABLE `program_requirements`
   ADD PRIMARY KEY (`id`),
   ADD KEY `program_id` (`program_id`),
-  ADD KEY `requirement_id` (`requirement_id`);
+  ADD KEY `requirement_id` (`requirement_id`),
+  ADD KEY `form_id` (`form_id`);
 
 --
 -- Indexes for table `requirements`
@@ -1130,7 +1044,8 @@ ALTER TABLE `programs`
 --
 ALTER TABLE `program_requirements`
   ADD CONSTRAINT `program_requirements_ibfk_1` FOREIGN KEY (`program_id`) REFERENCES `programs` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `program_requirements_ibfk_2` FOREIGN KEY (`requirement_id`) REFERENCES `requirements` (`id`) ON DELETE CASCADE;
+  ADD CONSTRAINT `program_requirements_ibfk_2` FOREIGN KEY (`requirement_id`) REFERENCES `requirements` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_program_requirements_form` FOREIGN KEY (`form_id`) REFERENCES `forms` (`id`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `students`
