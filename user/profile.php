@@ -4,7 +4,11 @@ if (!isset($pdo, $userId, $user) || !($pdo instanceof PDO)) {
     exit;
 }
 
-$departmentOptions = require __DIR__ . '/../config/academic_departments.php';
+require_once __DIR__ . '/../config/psu_academics.php';
+$psuCampuses  = psu_campuses();
+$yearLevels   = psu_year_levels();
+$facultyRanks = psu_faculty_ranks();
+$isStudentAccount = ($user['account_type'] ?? 'Student') !== 'Faculty';
 $activeTab = $_GET['tab'] ?? 'profile'; // profile, security, danger
 
 $saved = false;
@@ -29,15 +33,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $contact   = is_string($_POST['contact'] ?? null) ? trim($_POST['contact']) : '';
             $birthdate = is_string($_POST['birthdate'] ?? null) ? trim($_POST['birthdate']) : '';
             $sex       = is_string($_POST['sex'] ?? null) ? $_POST['sex'] : '';
-            $department = is_string($_POST['department'] ?? null) ? $_POST['department'] : '';
+            $field = fn(string $k): string => is_string($_POST[$k] ?? null) ? trim($_POST[$k]) : '';
+            $institutionSel  = $field('institution');
+            $institutionName = $field('institution_name');
+            $campus          = $field('campus');
+            $department      = $field('department');
+            $otherDepartment = $field('other_department');
+            $otherProgram    = $field('other_program');
+            $studentNumber   = $field('student_number');
+            $yearLevel       = $field('year_level');
+            $employeeId      = $field('employee_id_number');
+            $facultyRank     = $field('faculty_rank');
+            $designation     = $field('designation');
 
             if ($first === '') $errors[] = 'First name is required.';
             if ($last === '')  $errors[] = 'Last name is required.';
             if (mb_strlen($first) > 100 || mb_strlen($middle) > 100 || mb_strlen($last) > 100) {
                 $errors[] = 'Names must be 100 characters or fewer.';
             }
-            if (!array_key_exists($department, $departmentOptions)) {
-                $errors[] = 'Select a valid department.';
+
+            // Affiliation: PSU users choose a campus first, then a program offered there.
+            if ($institutionSel === PSU_INSTITUTION) {
+                if (!psu_is_valid_campus($campus)) {
+                    $errors[] = 'Select your PSU campus.';
+                } elseif (!psu_campus_offers($campus, $department)) {
+                    $errors[] = 'Select a program offered at ' . $campus . '.';
+                }
+                $institutionForDb = PSU_INSTITUTION;
+                $campusForDb      = $campus;
+                $departmentForDb  = $department;
+                $programForDb     = $isStudentAccount ? $department : null;
+            } elseif ($institutionSel === 'Other') {
+                if ($institutionName === '' || mb_strlen($institutionName) > 150) {
+                    $errors[] = 'Enter the name of your institution (150 characters max).';
+                }
+                if ($otherDepartment === '' || mb_strlen($otherDepartment) > 150) {
+                    $errors[] = 'Enter your college/department (150 characters max).';
+                }
+                if ($isStudentAccount && ($otherProgram === '' || mb_strlen($otherProgram) > 150)) {
+                    $errors[] = 'Enter your program/course (150 characters max).';
+                }
+                $institutionForDb = $institutionName;
+                $campusForDb      = null;
+                $departmentForDb  = $otherDepartment;
+                $programForDb     = $isStudentAccount ? $otherProgram : null;
+            } else {
+                $errors[] = 'Select your institution.';
+            }
+
+            // Classification-specific details.
+            if ($isStudentAccount) {
+                if ($studentNumber === '' || mb_strlen($studentNumber) > 30) {
+                    $errors[] = 'Enter your student number (30 characters max).';
+                }
+                if (!in_array($yearLevel, $yearLevels, true)) {
+                    $errors[] = 'Select your year level.';
+                }
+            } else {
+                if ($employeeId === '' || mb_strlen($employeeId) > 30) {
+                    $errors[] = 'Enter your employee ID number (30 characters max).';
+                }
+                if (!in_array($facultyRank, $facultyRanks, true)) {
+                    $errors[] = 'Select your rank/position.';
+                }
+                if (mb_strlen($designation) > 150) {
+                    $errors[] = 'Designation must be 150 characters or fewer.';
+                }
             }
             if (mb_strlen($suffix) > 20) {
                 $errors[] = 'Suffix must be 20 characters or fewer.';
@@ -59,13 +120,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $pdo->prepare("
                     UPDATE users
                     SET first_name = ?, middle_name = ?, last_name = ?, suffix = ?,
-                        contact = ?, birthdate = ?, sex = ?, department = ?
+                        contact = ?, birthdate = ?, sex = ?,
+                        institution = ?, campus = ?, department = ?, program = ?,
+                        student_id_number = ?, year_level = ?,
+                        employee_id_number = ?, faculty_rank = ?, designation = ?
                     WHERE id = ?
                 ");
                 $stmt->execute([
                     $first, $middle !== '' ? $middle : null, $last, $suffix !== '' ? $suffix : null,
-                    $contact !== '' ? $contact : null, $birthdate !== '' ? $birthdate : null, 
-                    $sex !== '' ? $sex : null, $department, $userId,
+                    $contact !== '' ? $contact : null, $birthdate !== '' ? $birthdate : null,
+                    $sex !== '' ? $sex : null,
+                    $institutionForDb, $campusForDb, $departmentForDb, $programForDb,
+                    $isStudentAccount ? $studentNumber : null,
+                    $isStudentAccount ? $yearLevel : null,
+                    $isStudentAccount ? null : $employeeId,
+                    $isStudentAccount ? null : $facultyRank,
+                    (!$isStudentAccount && $designation !== '') ? $designation : null,
+                    $userId,
                 ]);
 
                 $stmt = $pdo->prepare('SELECT * FROM users WHERE id = ?');
@@ -134,6 +205,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+/* Affiliation / classification values shown in the form (submitted values win after a failed save). */
+$savedInstitution = (string)($user['institution'] ?? '');
+$savedIsPsu = $savedInstitution === '' || $savedInstitution === PSU_INSTITUTION;
+$savedDepartment = (string)($user['department'] ?? '');
+$pf = [
+    'institution'      => $savedIsPsu ? PSU_INSTITUTION : 'Other',
+    'institution_name' => $savedIsPsu ? '' : $savedInstitution,
+    'campus'           => $savedIsPsu ? ((string)($user['campus'] ?? '') ?: (string)psu_infer_campus($savedDepartment)) : '',
+    'department'       => $savedIsPsu ? $savedDepartment : '',
+    'other_department' => $savedIsPsu ? '' : $savedDepartment,
+    'other_program'    => $savedIsPsu ? '' : (string)($user['program'] ?? ''),
+    'student_number'   => (string)($user['student_id_number'] ?? ''),
+    'year_level'       => (string)($user['year_level'] ?? ''),
+    'employee_id_number' => (string)($user['employee_id_number'] ?? ''),
+    'faculty_rank'     => (string)($user['faculty_rank'] ?? ''),
+    'designation'      => (string)($user['designation'] ?? ''),
+];
+if ($errors && ($_POST['action'] ?? '') === 'update_profile') {
+    foreach (array_keys($pf) as $k) {
+        if (is_string($_POST[$k] ?? null)) {
+            $pf[$k] = trim($_POST[$k]);
+        }
+    }
+}
+$pfIsPsu = $pf['institution'] === PSU_INSTITUTION;
 
 $fullName = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
 $initials = strtoupper(substr($user['first_name'] ?? 'A', 0, 1) . substr($user['last_name'] ?? '', 0, 1));
@@ -476,25 +573,122 @@ if (isset($pdo, $userId)) {
                     <input type="email" value="<?= h($user['email'] ?? '') ?>" disabled title="Email cannot be changed">
                 </div>
             </div>
+            <?php $bldg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6"/></svg>'; ?>
+            <?php $idIc = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M15 9h3M15 13h3M6 17c.5-2 2-3 3-3s2.5 1 3 3"/></svg>'; ?>
             <div class="profile-form-group">
-                <label>Department *</label>
+                <label>Classification (Locked)</label>
                 <div class="input-wrapper">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6"/></svg>
-                    <select name="department" required>
-                        <option value="">Select department</option>
-                        <?php foreach ($departmentOptions as $department => $label): ?>
-                            <option value="<?= h($department) ?>" <?= ($user['department'] ?? '') === $department ? 'selected' : '' ?>><?= h($label) ?></option>
+                    <?= $idIc ?>
+                    <input type="text" value="<?= $isStudentAccount ? 'Student' : 'Faculty / Employee' ?>" disabled title="Contact the administrator to change your classification">
+                </div>
+            </div>
+            <div class="profile-form-group">
+                <label>Institution *</label>
+                <div class="input-wrapper">
+                    <?= $bldg ?>
+                    <select name="institution" id="pf-institution" required>
+                        <option value="<?= h(PSU_INSTITUTION) ?>" <?= $pfIsPsu ? 'selected' : '' ?>><?= h(PSU_INSTITUTION) ?></option>
+                        <option value="Other" <?= $pfIsPsu ? '' : 'selected' ?>>Other institution</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- PSU: campus first, then programs offered on that campus -->
+            <div class="profile-form-group" data-pf-group="psu">
+                <label>Campus *</label>
+                <div class="input-wrapper">
+                    <?= $bldg ?>
+                    <select name="campus" id="pf-campus" required>
+                        <option value="">Select campus</option>
+                        <?php foreach (array_keys($psuCampuses) as $campusName): ?>
+                            <option value="<?= h($campusName) ?>" <?= $pf['campus'] === $campusName ? 'selected' : '' ?>><?= h($campusName) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="profile-form-group" data-pf-group="psu">
+                <label><?= $isStudentAccount ? 'Program *' : 'Department / Program *' ?></label>
+                <div class="input-wrapper">
+                    <?= $bldg ?>
+                    <select name="department" id="pf-department" required data-selected="<?= h($pf['department']) ?>">
+                        <option value="">Select a campus first</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Non-PSU institution -->
+            <div class="profile-form-group" data-pf-group="other">
+                <label>Name of Institution *</label>
+                <div class="input-wrapper">
+                    <?= $bldg ?>
+                    <input type="text" name="institution_name" maxlength="150" value="<?= h($pf['institution_name']) ?>" required>
+                </div>
+            </div>
+            <div class="profile-form-group" data-pf-group="other">
+                <label>College / Department *</label>
+                <div class="input-wrapper">
+                    <?= $bldg ?>
+                    <input type="text" name="other_department" maxlength="150" value="<?= h($pf['other_department']) ?>" required>
+                </div>
+            </div>
+            <?php if ($isStudentAccount): ?>
+            <div class="profile-form-group" data-pf-group="other">
+                <label>Program / Course *</label>
+                <div class="input-wrapper">
+                    <?= $bldg ?>
+                    <input type="text" name="other_program" maxlength="150" value="<?= h($pf['other_program']) ?>" required>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <?php if ($isStudentAccount): ?>
+            <div class="profile-form-group">
+                <label>Student Number *</label>
+                <div class="input-wrapper">
+                    <?= $idIc ?>
+                    <input type="text" name="student_number" maxlength="30" value="<?= h($pf['student_number']) ?>" placeholder="e.g. 22-BGU-1283" required>
+                </div>
+            </div>
+            <div class="profile-form-group">
+                <label>Year Level *</label>
+                <div class="input-wrapper">
+                    <?= $idIc ?>
+                    <select name="year_level" required>
+                        <option value="">Select year level</option>
+                        <?php foreach ($yearLevels as $yl): ?>
+                            <option value="<?= h($yl) ?>" <?= $pf['year_level'] === $yl ? 'selected' : '' ?>><?= h($yl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <?php else: ?>
+            <div class="profile-form-group">
+                <label>Employee ID Number *</label>
+                <div class="input-wrapper">
+                    <?= $idIc ?>
+                    <input type="text" name="employee_id_number" maxlength="30" value="<?= h($pf['employee_id_number']) ?>" required>
+                </div>
+            </div>
+            <div class="profile-form-group">
+                <label>Rank / Position *</label>
+                <div class="input-wrapper">
+                    <?= $idIc ?>
+                    <select name="faculty_rank" required>
+                        <option value="">Select rank/position</option>
+                        <?php foreach ($facultyRanks as $rank): ?>
+                            <option value="<?= h($rank) ?>" <?= $pf['faculty_rank'] === $rank ? 'selected' : '' ?>><?= h($rank) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
             </div>
             <div class="profile-form-group">
-                <label>Program</label>
+                <label>Designation</label>
                 <div class="input-wrapper">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6"/></svg>
-                    <input type="text" value="<?= h($user['program'] ?? '') ?>" disabled>
+                    <?= $idIc ?>
+                    <input type="text" name="designation" maxlength="150" value="<?= h($pf['designation']) ?>" placeholder="e.g. Department Chair">
                 </div>
             </div>
+            <?php endif; ?>
             <div class="profile-form-group">
                 <label>Contact Number</label>
                 <div class="input-wrapper">
@@ -526,6 +720,42 @@ if (isset($pdo, $userId)) {
             <i class="fa-solid fa-floppy-disk"></i> Save Changes
         </button>
     </form>
+    <script>
+    (function () {
+        const CAMPUSES = <?= json_encode($psuCampuses, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        const PSU_NAME = <?= json_encode(PSU_INSTITUTION) ?>;
+        const inst = document.getElementById('pf-institution');
+        const campus = document.getElementById('pf-campus');
+        const dept = document.getElementById('pf-department');
+
+        function fillPrograms() {
+            const keep = dept.value || dept.dataset.selected || '';
+            dept.innerHTML = '';
+            dept.add(new Option(campus.value ? 'Select program' : 'Select a campus first', ''));
+            Object.entries(CAMPUSES[campus.value] || {}).forEach(([name, label]) => {
+                const opt = new Option(name + ' (' + label + ')', name);
+                if (name === keep) opt.selected = true;
+                dept.add(opt);
+            });
+            dept.dataset.selected = '';
+        }
+
+        // Hidden groups are disabled so their required fields are skipped and not submitted.
+        function refresh() {
+            const isPsu = inst.value === PSU_NAME;
+            document.querySelectorAll('[data-pf-group]').forEach(g => {
+                const show = (g.dataset.pfGroup === 'psu') === isPsu;
+                g.style.display = show ? '' : 'none';
+                g.querySelectorAll('input, select').forEach(f => { f.disabled = !show; });
+            });
+        }
+
+        campus.addEventListener('change', () => { dept.value = ''; fillPrograms(); });
+        inst.addEventListener('change', refresh);
+        fillPrograms();
+        refresh();
+    })();
+    </script>
     <?php endif; ?>
 
     <!-- ==========================================
